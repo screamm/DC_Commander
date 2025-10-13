@@ -375,8 +375,13 @@ class ProgressDialog(BaseDialog):
         Args:
             progress: New progress value
         """
-        progress_bar = self.query_one("#progress_bar", ProgressBar)
-        progress_bar.update(progress=progress)
+        # Only update widgets if mounted
+        if self.is_mounted:
+            try:
+                progress_bar = self.query_one("#progress_bar", ProgressBar)
+                progress_bar.update(progress=progress)
+            except:
+                pass  # Widget not ready yet
 
     def watch_status_text(self, text: str) -> None:
         """React to status text changes.
@@ -384,8 +389,13 @@ class ProgressDialog(BaseDialog):
         Args:
             text: New status text
         """
-        label = self.query_one("#progress_label", Label)
-        label.update(text)
+        # Only update widgets if mounted
+        if self.is_mounted:
+            try:
+                label = self.query_one("#progress_label", Label)
+                label.update(text)
+            except:
+                pass  # Widget not ready yet
 
     def update_progress(self, progress: float, status: Optional[str] = None) -> None:
         """Update progress and status.

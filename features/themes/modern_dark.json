@@ -1,0 +1,15 @@
+{
+  "name": "modern_dark",
+  "display_name": "Modern Dark",
+  "primary": "#1E90FF",
+  "accent": "#00CED1",
+  "surface": "#1A1A1A",
+  "panel": "#2A2A2A",
+  "text": "#E0E0E0",
+  "text_muted": "#888888",
+  "warning": "#FFA500",
+  "error": "#FF4444",
+  "success": "#44FF44",
+  "selection": "#1E90FF",
+  "selection_text": "#FFFFFF"
+}

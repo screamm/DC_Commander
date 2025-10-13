@@ -1,0 +1,15 @@
+{
+  "name": "norton_commander",
+  "display_name": "Norton Commander",
+  "primary": "#0000AA",
+  "accent": "#00FFFF",
+  "surface": "#000055",
+  "panel": "#0000AA",
+  "text": "#FFFF77",
+  "text_muted": "#8888AA",
+  "warning": "#FFFF00",
+  "error": "#FF5555",
+  "success": "#55FF55",
+  "selection": "#FFFF00",
+  "selection_text": "#000000"
+}

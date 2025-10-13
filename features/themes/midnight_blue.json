@@ -1,0 +1,25 @@
+{
+  "name": "midnight_blue",
+  "display_name": "Midnight Blue",
+  "primary": "#4169E1",
+  "accent": "#6495ED",
+  "surface": "#191970",
+  "panel": "#000080",
+  "text": "#F0F8FF",
+  "text_muted": "#B0C4DE",
+  "warning": "#FFD700",
+  "error": "#FF6347",
+  "success": "#98FB98",
+  "selection": "#4169E1",
+  "selection_text": "#FFFFFF",
+  "metadata": {
+    "theme_id": "midnight_blue",
+    "display_name": "Midnight Blue",
+    "theme_type": "built_in",
+    "description": "Deep blue theme with royal blue accents",
+    "author": "DC Commander",
+    "created_date": "2025-10-12T00:00:00",
+    "modified_date": "2025-10-12T00:00:00",
+    "is_editable": false
+  }
+}

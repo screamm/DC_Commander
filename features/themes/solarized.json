@@ -1,0 +1,15 @@
+{
+  "name": "solarized",
+  "display_name": "Solarized Dark",
+  "primary": "#268BD2",
+  "accent": "#2AA198",
+  "surface": "#002B36",
+  "panel": "#073642",
+  "text": "#839496",
+  "text_muted": "#586E75",
+  "warning": "#B58900",
+  "error": "#DC322F",
+  "success": "#859900",
+  "selection": "#268BD2",
+  "selection_text": "#FDF6E3"
+}

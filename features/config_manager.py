@@ -22,6 +22,15 @@ class PanelConfig:
 
 
 @dataclass
+class CacheConfig:
+    """Directory cache configuration"""
+    enabled: bool = True
+    maxsize: int = 100  # Maximum number of cached directories
+    ttl_seconds: int = 60  # Time-to-live in seconds
+    show_stats: bool = False  # Show cache statistics in UI
+
+
+@dataclass
 class ColorScheme:
     """Color scheme configuration"""
     name: str = "default"
@@ -81,10 +90,12 @@ class Config:
     """Main configuration class"""
     left_panel: PanelConfig = field(default_factory=PanelConfig)
     right_panel: PanelConfig = field(default_factory=PanelConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
     color_scheme: ColorScheme = field(default_factory=ColorScheme)
     editor: EditorSettings = field(default_factory=EditorSettings)
     view: ViewSettings = field(default_factory=ViewSettings)
     shortcuts: KeyboardShortcuts = field(default_factory=KeyboardShortcuts)
+    theme: str = "norton_commander"  # Theme name for ThemeManager
 
 
 class ConfigManager:
@@ -207,10 +218,12 @@ class ConfigManager:
         return {
             "left_panel": asdict(config.left_panel),
             "right_panel": asdict(config.right_panel),
+            "cache": asdict(config.cache),
             "color_scheme": asdict(config.color_scheme),
             "editor": asdict(config.editor),
             "view": asdict(config.view),
-            "shortcuts": asdict(config.shortcuts)
+            "shortcuts": asdict(config.shortcuts),
+            "theme": config.theme
         }
 
     @staticmethod
@@ -223,6 +236,10 @@ class ConfigManager:
             config.left_panel = PanelConfig(**data["left_panel"])
         if "right_panel" in data:
             config.right_panel = PanelConfig(**data["right_panel"])
+
+        # Load cache configuration
+        if "cache" in data:
+            config.cache = CacheConfig(**data["cache"])
 
         # Load color scheme
         if "color_scheme" in data:
@@ -239,6 +256,10 @@ class ConfigManager:
         # Load keyboard shortcuts
         if "shortcuts" in data:
             config.shortcuts = KeyboardShortcuts(**data["shortcuts"])
+
+        # Load theme
+        if "theme" in data:
+            config.theme = data["theme"]
 
         return config
 
@@ -257,6 +278,32 @@ class ConfigManager:
         """Update right panel start path"""
         config = self.get_config()
         config.right_panel.start_path = path
+
+    def update_cache_settings(
+        self,
+        enabled: Optional[bool] = None,
+        maxsize: Optional[int] = None,
+        ttl_seconds: Optional[int] = None,
+        show_stats: Optional[bool] = None
+    ) -> None:
+        """
+        Update cache configuration settings.
+
+        Args:
+            enabled: Enable/disable caching
+            maxsize: Maximum cache size
+            ttl_seconds: Time-to-live in seconds
+            show_stats: Show cache statistics
+        """
+        config = self.get_config()
+        if enabled is not None:
+            config.cache.enabled = enabled
+        if maxsize is not None:
+            config.cache.maxsize = maxsize
+        if ttl_seconds is not None:
+            config.cache.ttl_seconds = ttl_seconds
+        if show_stats is not None:
+            config.cache.show_stats = show_stats
 
     def update_color_scheme(self, scheme_name: str) -> None:
         """
@@ -313,6 +360,16 @@ class ConfigManager:
         if scheme_name in schemes:
             config.color_scheme = schemes[scheme_name]
 
+    def update_theme(self, theme_name: str) -> None:
+        """
+        Update theme preference.
+
+        Args:
+            theme_name: Name of theme to apply
+        """
+        config = self.get_config()
+        config.theme = theme_name
+
     def reset_to_defaults(self) -> None:
         """Reset configuration to default values"""
         self._config = Config()
@@ -334,6 +391,13 @@ class ConfigManager:
 
         if config.right_panel.start_path and not Path(config.right_panel.start_path).exists():
             issues.append(f"Right panel path does not exist: {config.right_panel.start_path}")
+
+        # Validate cache settings
+        if config.cache.maxsize < 1 or config.cache.maxsize > 1000:
+            issues.append(f"Invalid cache maxsize: {config.cache.maxsize} (must be 1-1000)")
+
+        if config.cache.ttl_seconds < 1 or config.cache.ttl_seconds > 3600:
+            issues.append(f"Invalid cache TTL: {config.cache.ttl_seconds} (must be 1-3600)")
 
         # Validate editor settings
         if config.editor.tab_size < 1 or config.editor.tab_size > 16:

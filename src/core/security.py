@@ -7,8 +7,9 @@ archive handling, and path traversal prevention.
 
 import os
 import re
+import errno
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, BinaryIO
 from dataclasses import dataclass
 
 
@@ -29,6 +30,11 @@ class ArchiveBombError(SecurityError):
 
 class UnsafePathError(SecurityError):
     """Raised when path contains dangerous patterns."""
+    pass
+
+
+class TOCTOUError(SecurityError):
+    """Raised when Time-of-Check-Time-of-Use race condition is detected."""
     pass
 
 
@@ -72,6 +78,190 @@ def set_security_config(config: SecurityConfig) -> None:
     """Set security configuration."""
     global _security_config
     _security_config = config
+
+
+def secure_open(
+    path: Path,
+    mode: str,
+    *,
+    follow_symlinks: bool = False,
+    buffering: int = -1
+) -> BinaryIO:
+    """
+    Open file with TOCTOU protection using O_NOFOLLOW.
+
+    Prevents Time-of-Check-Time-of-Use race conditions by atomically
+    verifying the path is not a symlink during open operation.
+
+    Args:
+        path: File path to open
+        mode: Open mode ('r', 'rb', 'w', 'wb', etc.)
+        follow_symlinks: Allow symlinks (default: False for security)
+        buffering: Buffer size for file I/O
+
+    Returns:
+        File handle opened with TOCTOU protection
+
+    Raises:
+        TOCTOUError: If path is symlink and follow_symlinks=False
+        SecurityError: Other security violations during open
+        OSError: File operation errors
+
+    Examples:
+        >>> with secure_open(Path('file.txt'), 'rb') as f:
+        ...     data = f.read()
+
+        >>> # This will fail if file.txt is replaced with symlink
+        >>> with secure_open(Path('file.txt'), 'wb') as f:
+        ...     f.write(b'data')
+    """
+    try:
+        # On Windows, check symlink before opening (O_NOFOLLOW not available)
+        if not follow_symlinks and os.name == 'nt':
+            if path.exists() and path.is_symlink():
+                raise TOCTOUError(
+                    f"Symlink detected (TOCTOU protection): {path}"
+                )
+
+        # Determine flags based on mode
+        if 'r' in mode and '+' not in mode:
+            flags = os.O_RDONLY
+        elif 'w' in mode:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        elif 'a' in mode:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+        elif '+' in mode:
+            flags = os.O_RDWR
+            if 'w' in mode:
+                flags |= os.O_CREAT | os.O_TRUNC
+        else:
+            flags = os.O_RDONLY
+
+        # Add O_NOFOLLOW for symlink protection on Unix (critical for TOCTOU prevention)
+        # Note: O_NOFOLLOW not available on Windows, we check manually above
+        if not follow_symlinks and hasattr(os, 'O_NOFOLLOW'):
+            flags |= os.O_NOFOLLOW
+
+        # Add binary mode on Windows
+        if os.name == 'nt':
+            flags |= os.O_BINARY
+
+        # Atomic open with O_NOFOLLOW prevents TOCTOU attacks on Unix
+        # On Windows, we checked symlink status before opening
+        fd = os.open(path, flags, 0o644)
+        return os.fdopen(fd, mode, buffering=buffering)
+
+    except OSError as e:
+        if e.errno == errno.ELOOP:
+            raise TOCTOUError(
+                f"Symlink detected during atomic open (TOCTOU protection): {path}"
+            )
+        elif e.errno == errno.ENOENT:
+            raise FileNotFoundError(f"File not found: {path}")
+        elif e.errno == errno.EACCES or e.errno == errno.EPERM:
+            raise PermissionError(f"Permission denied: {path}")
+        else:
+            raise SecurityError(f"Secure open failed for {path}: {e}")
+
+
+def secure_stat(
+    path: Path,
+    *,
+    follow_symlinks: bool = False
+) -> os.stat_result:
+    """
+    Stat file with TOCTOU protection.
+
+    Uses lstat to avoid following symlinks by default, preventing
+    race conditions where symlinks are created between check and use.
+
+    Args:
+        path: Path to stat
+        follow_symlinks: Follow symlinks (default: False for security)
+
+    Returns:
+        os.stat_result with file statistics
+
+    Raises:
+        TOCTOUError: Circular symlink detected
+        SecurityError: Stat operation security violation
+        OSError: File system errors
+
+    Examples:
+        >>> stat = secure_stat(Path('file.txt'))
+        >>> print(f"Size: {stat.st_size}, Mode: {stat.st_mode}")
+    """
+    try:
+        if follow_symlinks:
+            return path.stat()
+        else:
+            # Use lstat to not follow symlinks (critical for TOCTOU prevention)
+            return path.lstat()
+
+    except OSError as e:
+        if e.errno == errno.ELOOP:
+            raise TOCTOUError(f"Circular symlink detected: {path}")
+        elif e.errno == errno.ENOENT:
+            raise FileNotFoundError(f"Path not found: {path}")
+        elif e.errno == errno.EACCES:
+            raise PermissionError(f"Permission denied: {path}")
+        else:
+            raise SecurityError(f"Secure stat failed for {path}: {e}")
+
+
+def secure_copy_data(
+    source_fd: int,
+    dest_fd: int,
+    chunk_size: int = 64 * 1024
+) -> int:
+    """
+    Copy data between file descriptors with TOCTOU protection.
+
+    Uses low-level file descriptors to ensure atomicity and prevent
+    race conditions during copy operations.
+
+    Args:
+        source_fd: Source file descriptor (opened with secure_open)
+        dest_fd: Destination file descriptor (opened with secure_open)
+        chunk_size: Buffer size for copying (default: 64KB)
+
+    Returns:
+        Total bytes copied
+
+    Raises:
+        SecurityError: Copy operation security violation
+        OSError: File I/O errors during copy
+
+    Examples:
+        >>> with secure_open(src, 'rb') as src_f:
+        ...     with secure_open(dst, 'wb') as dst_f:
+        ...         bytes_copied = secure_copy_data(
+        ...             src_f.fileno(), dst_f.fileno()
+        ...         )
+    """
+    try:
+        total_bytes = 0
+
+        while True:
+            # Read chunk from source
+            chunk = os.read(source_fd, chunk_size)
+            if not chunk:
+                break
+
+            # Write chunk to destination
+            bytes_written = os.write(dest_fd, chunk)
+            total_bytes += bytes_written
+
+            # Verify all bytes were written
+            if bytes_written != len(chunk):
+                raise SecurityError(
+                    f"Incomplete write: {bytes_written} of {len(chunk)} bytes"
+                )
+
+        return total_bytes
+
+    except OSError as e:
+        raise SecurityError(f"Secure copy failed: {e}")
 
 
 def validate_path(

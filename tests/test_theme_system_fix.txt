@@ -1,0 +1,45 @@
+    def test_theme_toggle_with_persistence(self, theme_manager, sample_theme):
+        """Test theme toggling with configuration persistence."""
+        # 1. Save base theme first
+        base_theme = Theme(
+            name="test_base",
+            display_name="Base Theme",
+            primary="#0000AA",
+            accent="#00FFFF",
+            surface="#000055",
+            panel="#0000AA",
+            text="#FFFF77",
+            text_muted="#AAAAAA",
+            warning="#FFFF00",
+            error="#FF5555",
+            success="#55FF55",
+            selection="#FFFF00",
+            selection_text="#000000"
+        )
+        theme_manager.save_theme(base_theme)
+        
+        # 2. Save custom theme
+        theme_manager.save_custom_theme("custom1", sample_theme)
+
+        # 3. Apply base theme
+        assert theme_manager.apply_theme("test_base") is True
+        assert theme_manager._current_theme is not None
+        assert theme_manager._current_theme.name == "test_base"
+
+        # 4. Toggle to next theme - in temp directory only custom1 and test_base exist
+        next_id = theme_manager.toggle_theme()
+        assert next_id is not None
+
+        # 5. Apply toggled theme
+        if next_id:
+            assert theme_manager.apply_theme(next_id) is True
+            assert theme_manager._current_theme is not None
+
+        # 6. Toggle multiple times
+        for _ in range(3):
+            next_id = theme_manager.toggle_theme()
+            if next_id:
+                theme_manager.apply_theme(next_id)
+
+        # Should have valid theme after cycling
+        assert theme_manager._current_theme is not None

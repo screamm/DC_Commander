@@ -79,12 +79,12 @@ class CommandButton(Static):
         Returns:
             Formatted button text
         """
-        # Use Rich markup for styling instead of CSS classes
-        key = f"[bold yellow]{self.command.key}[/bold yellow]"
-        separator = "[dim cyan]:[/dim cyan]"
+        # Extract number from F-key (F1 → 1)
+        key_num = self.command.key.replace("F", "")
+        key = f"[bold yellow]{key_num}[/bold yellow]"
         label = self.command.label
 
-        return f"{key}{separator}{label}"
+        return f"{key}{label}"
 
     def watch_enabled(self, enabled: bool) -> None:
         """React to enabled state changes.
@@ -126,10 +126,10 @@ class CommandBar(Horizontal):
         "f3": Command("F3", "View", "view_file"),
         "f4": Command("F4", "Edit", "edit_file"),
         "f5": Command("F5", "Copy", "copy_files"),
-        "f6": Command("F6", "Move", "move_files"),
-        "f7": Command("F7", "NewDir", "create_directory"),
+        "f6": Command("F6", "RenMov", "move_files"),
+        "f7": Command("F7", "Mkdir", "create_directory"),
         "f8": Command("F8", "Delete", "delete_files"),
-        "f9": Command("F9", "Config", "show_config"),
+        "f9": Command("F9", "PullDn", "show_config"),
         "f10": Command("F10", "Quit", "quit"),
     }
 
@@ -224,7 +224,7 @@ class CommandBar(Horizontal):
         for key, updates in context_commands.items():
             self.update_command(key, **updates)
 
-    def _get_context_commands(self, context: str) -> Dict[str, Dict]:
+    def _get_context_commands(self, context: str) -> Dict[str, Dict[str, bool]]:
         """Get command updates for specific context.
 
         Args:

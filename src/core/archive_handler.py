@@ -686,8 +686,10 @@ def get_archive_info(path: Path) -> Dict[str, any]:
     }
 
     if info['total_size'] > 0:
-        info['compression_ratio'] = (
-            1 - info['compressed_size'] / info['total_size']
-        ) * 100
+        ratio = (1 - info['compressed_size'] / info['total_size']) * 100
+        # Clamp to 0-100 range (small files can have negative compression due to overhead)
+        info['compression_ratio'] = max(0.0, min(100.0, ratio))
+    else:
+        info['compression_ratio'] = 0.0
 
     return info
