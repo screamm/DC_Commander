@@ -164,7 +164,9 @@ class ModernCommanderApp(App):
         # 1. CSS variables are IMMUTABLE in Textual
         # 2. $panel collides with Textual's internal variable
         # 3. We use direct widget styling in on_mount() instead
-        initial_theme = self.config.theme or "norton_commander"
+
+        # Set Norton Commander as default theme
+        initial_theme = self.config.theme if self.config.theme else "norton_commander"
         self.theme_manager.set_current_theme(initial_theme)  # Just set, don't apply CSS
 
         # Panel state
@@ -258,6 +260,9 @@ class ModernCommanderApp(App):
         # Get Quick View references
         self.left_quick_view = self.query_one("#left-quick-view", QuickViewWidget)
         self.right_quick_view = self.query_one("#right-quick-view", QuickViewWidget)
+
+        # Apply theme visually (colors to widgets)
+        self._apply_theme(self.config.theme)
 
         # Focus left panel initially
         self.left_panel.focus()
@@ -1894,7 +1899,8 @@ Use F2 menu → Left/Right → Brief/Full to change view mode."""
 def main() -> None:
     """Application entry point."""
     app: ModernCommanderApp = ModernCommanderApp()
-    app.run()
+    # Start with larger window size for better visibility (140x40 characters)
+    app.run(size=(140, 40))
 
 
 if __name__ == "__main__":

@@ -49,11 +49,85 @@ class AsyncFileService:
         """
         self.async_ops = AsyncFileOperations(chunk_size=chunk_size)
         self._cancelled = False
+        self._partial_files: List[Path] = []
+        self._cancel_lock = None
+        self._current_task: Optional[asyncio.Task] = None
+        self._cleanup_enabled = True
 
     def cancel(self) -> None:
-        """Cancel current operation."""
+        """Cancel current operation (synchronous version)."""
         self._cancelled = True
         self.async_ops.cancel()
+
+    async def cancel_with_cleanup(self, timeout: float = 5.0) -> int:
+        """Cancel operation and clean up partial files.
+
+        Args:
+            timeout: Maximum time to wait for current operation (seconds)
+
+        Returns:
+            Number of partial files cleaned up
+        """
+        if self._cancel_lock is None:
+            import asyncio
+            self._cancel_lock = asyncio.Lock()
+
+        async with self._cancel_lock:
+            self._cancelled = True
+            self.async_ops.cancel()
+
+            # Wait for current operation to finish (with timeout)
+            if self._current_task and not self._current_task.done():
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(self._current_task),
+                        timeout=timeout
+                    )
+                except asyncio.TimeoutError:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning("Cancel timeout - forcing termination")
+                    self._current_task.cancel()
+
+            # Clean up partial files
+            cleaned = 0
+            for temp_file in self._partial_files[:]:
+                try:
+                    if temp_file.exists():
+                        if temp_file.is_dir():
+                            import shutil
+                            shutil.rmtree(temp_file)
+                        else:
+                            temp_file.unlink()
+                        cleaned += 1
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.info(f"Cleaned up partial file: {temp_file}")
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Failed to clean up {temp_file}: {e}")
+
+            self._partial_files.clear()
+            return cleaned
+
+    def _track_partial_file(self, path: Path) -> None:
+        """Track partial file for cleanup.
+
+        Args:
+            path: Path to track
+        """
+        if path not in self._partial_files:
+            self._partial_files.append(path)
+
+    def _untrack_partial_file(self, path: Path) -> None:
+        """Remove file from partial tracking.
+
+        Args:
+            path: Path to untrack
+        """
+        if path in self._partial_files:
+            self._partial_files.remove(path)
 
     def should_use_async(self, items: List[Path]) -> bool:
         """Determine if async operations should be used.
