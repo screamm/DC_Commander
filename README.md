@@ -5,7 +5,7 @@
 ![Textual](https://img.shields.io/badge/framework-Textual-purple?style=flat-square)
 ![License MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
-> **Note**: Please take a screenshot and place it at `assets/dccommanderscreenshot.png` for the README header image.
+![DC Commander Screenshot](assets/dccommanderscreenshot.png)
 
 A modern, cross-platform Norton Commander-style file manager built with Python and Textual. Experience the classic dual-pane interface with modern Python features including async file operations, comprehensive testing, and extensible architecture.
 
