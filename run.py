@@ -11,6 +11,7 @@ import platform
 import sys
 from pathlib import Path
 
+from src.utils.crash_reporter import install_crash_handler
 from src.utils.logging_config import get_logger, setup_logging
 
 __version__ = "0.2.0"
@@ -50,6 +51,11 @@ def main() -> None:
     logger = get_logger(__name__)
 
     version = _read_project_version()
+
+    # Install global crash handler AFTER logging is configured so uncaught
+    # exceptions are both logged and written to ~/.modern_commander/crashes/.
+    # Passed version ends up in every crash-dump header.
+    install_crash_handler(version=version)
     logger.info("=" * 60)
     logger.info("DC Commander starting up")
     logger.info("Version : %s", version)
