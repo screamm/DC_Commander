@@ -72,7 +72,8 @@ class FileViewer(Screen):
     }
 
     FileViewer .hex-view {
-        font-family: monospace;
+        /* font-family is not a valid Textual CSS property; hex content is
+           displayed via Rich Text which inherits the terminal font. */
     }
     """
 
@@ -105,7 +106,7 @@ class FileViewer(Screen):
         self.state: Optional[ViewerState] = None
         self.content_lines: List[str] = []
         self.wrap_lines: bool = False
-        self.scroll_offset: int = 0
+        self._content_scroll_y: int = 0
         self.is_binary: bool = False
 
     def compose(self) -> ComposeResult:
@@ -263,7 +264,7 @@ class FileViewer(Screen):
         if visible_height < 1:
             visible_height = 20
 
-        start_line = self.scroll_offset
+        start_line = self._content_scroll_y
         end_line = min(start_line + visible_height, self.state.total_lines)
 
         # Get visible content
@@ -362,7 +363,7 @@ class FileViewer(Screen):
         file_size = self.file_path.stat().st_size
         size_str = self._format_size(file_size)
 
-        current_line = self.scroll_offset + 1
+        current_line = self._content_scroll_y + 1
         total_lines = self.state.total_lines
         percentage = int((current_line / total_lines * 100)) if total_lines > 0 else 0
 
@@ -414,14 +415,14 @@ class FileViewer(Screen):
 
     def action_scroll_down(self) -> None:
         """Scroll down one line."""
-        if self.scroll_offset < self.state.total_lines - 1:
-            self.scroll_offset += 1
+        if self._content_scroll_y < self.state.total_lines - 1:
+            self._content_scroll_y += 1
             self._update_display()
 
     def action_scroll_up(self) -> None:
         """Scroll up one line."""
-        if self.scroll_offset > 0:
-            self.scroll_offset -= 1
+        if self._content_scroll_y > 0:
+            self._content_scroll_y -= 1
             self._update_display()
 
     def action_page_down(self) -> None:
@@ -429,8 +430,8 @@ class FileViewer(Screen):
         content_view = self.query_one("#content-view", Static)
         page_size = max(1, content_view.size.height - 2)
 
-        self.scroll_offset = min(
-            self.scroll_offset + page_size,
+        self._content_scroll_y = min(
+            self._content_scroll_y + page_size,
             max(0, self.state.total_lines - page_size)
         )
         self._update_display()
@@ -440,12 +441,12 @@ class FileViewer(Screen):
         content_view = self.query_one("#content-view", Static)
         page_size = max(1, content_view.size.height - 2)
 
-        self.scroll_offset = max(0, self.scroll_offset - page_size)
+        self._content_scroll_y = max(0, self._content_scroll_y - page_size)
         self._update_display()
 
     def action_goto_start(self) -> None:
         """Go to start of file."""
-        self.scroll_offset = 0
+        self._content_scroll_y = 0
         self._update_display()
 
     def action_goto_end(self) -> None:
@@ -453,7 +454,7 @@ class FileViewer(Screen):
         content_view = self.query_one("#content-view", Static)
         page_size = max(1, content_view.size.height - 2)
 
-        self.scroll_offset = max(0, self.state.total_lines - page_size)
+        self._content_scroll_y = max(0, self.state.total_lines - page_size)
         self._update_display()
 
     def action_toggle_hex(self) -> None:
@@ -469,11 +470,11 @@ class FileViewer(Screen):
             self.content_lines = self._format_hex(data)
             self.state.view_mode = "hex"
             self.state.total_lines = len(self.content_lines)
-            self.scroll_offset = 0
+            self._content_scroll_y = 0
         else:
             # Switch back to text
             self._load_text()
-            self.scroll_offset = 0
+            self._content_scroll_y = 0
 
         self._update_display()
 
@@ -488,7 +489,7 @@ class FileViewer(Screen):
             try:
                 target = int(line_num) - 1  # Convert to 0-based index
                 if 0 <= target < self.state.total_lines:
-                    self.scroll_offset = target
+                    self._content_scroll_y = target
                     self._update_display()
                 else:
                     self.notify(
@@ -518,7 +519,7 @@ class FileViewer(Screen):
                     self.state.search_matches.append(i)
 
             if self.state.search_matches:
-                self.scroll_offset = self.state.search_matches[0]
+                self._content_scroll_y = self.state.search_matches[0]
                 self._update_display()
                 self.notify(
                     f"Found {len(self.state.search_matches)} matches",
@@ -541,7 +542,7 @@ class FileViewer(Screen):
         # Find next match after current position
         next_match = None
         for match in self.state.search_matches:
-            if match > self.scroll_offset:
+            if match > self._content_scroll_y:
                 next_match = match
                 break
 
@@ -549,7 +550,7 @@ class FileViewer(Screen):
         if next_match is None:
             next_match = self.state.search_matches[0]
 
-        self.scroll_offset = next_match
+        self._content_scroll_y = next_match
         self._update_display()
 
     def action_prev_match(self) -> None:
@@ -561,7 +562,7 @@ class FileViewer(Screen):
         # Find previous match before current position
         prev_match = None
         for match in reversed(self.state.search_matches):
-            if match < self.scroll_offset:
+            if match < self._content_scroll_y:
                 prev_match = match
                 break
 
@@ -569,5 +570,5 @@ class FileViewer(Screen):
         if prev_match is None:
             prev_match = self.state.search_matches[-1]
 
-        self.scroll_offset = prev_match
+        self._content_scroll_y = prev_match
         self._update_display()
