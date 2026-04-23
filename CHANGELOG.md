@@ -4,6 +4,38 @@ All notable changes to DC Commander will be documented in this file.
 
 ## [Unreleased]
 
+### Sprint 4 — Distribution scaffolding (2026-04-23)
+
+#### Added
+- **NSIS installer** (`installer/windows/dc-commander.nsi`) — user-level Windows install, Start Menu shortcut, optional Desktop shortcut, conditional LICENSE page, uninstaller registered in Programs & Features.
+- **Linux AppImage build script** (`installer/linux/build_appimage.sh`) — PyInstaller → AppDir → appimagetool pipeline with version arg. Bundled `.desktop` entry and icon fallback.
+- **GitHub Actions release workflow** (`.github/workflows/release.yml`) — triggers on `v*` tags, builds Windows installer and Linux AppImage in parallel, publishes a GitHub Release with SHA256SUMS; auto-detects pre-release from tag format (`-rc1` → prerelease).
+- **Installer documentation** (`installer/README.md`, `installer/linux/build_appimage.sh.README.md`).
+- **CONTRIBUTING.md** (431 lines) — dev setup, project structure, code style, branching/commits, PR process, testing, running checks, reporting bugs.
+- **docs/user-manual.md** (492 lines) — keyboard reference grounded in actual `BINDINGS`, file-op walkthroughs, configuration, troubleshooting, FAQ.
+- **README.md Installation section** — per-OS install + source + SHA256 verification commands.
+
+### Sprint 3 — Known-issue fixes (2026-04-23)
+
+#### Fixed
+- **F3 viewer crash** (`features/file_viewer.py`) — `FileViewer.__init__` was overriding Textual's read-only `Screen.scroll_offset` reactive. Renamed internal attribute to `_content_scroll_y`. Also removed an invalid `font-family: monospace` declaration from `.hex-view` CSS that Textual's parser silently rejected.
+- **F9 config dialog crash** (`components/config_screen.py`) — three `Select` widgets had options in `(value, label)` order but Textual expects `(label, value)`. Swapped all three so the initial `value='name'` matches an option's value.
+- **Ctrl+Q quick view crash** (`components/quick_view_widget.py`) — added `preview_file(path)` and `clear_preview()` methods to match the caller contract in `modern_commander.py`.
+
+#### Added
+- 15 regression tests across `tests/test_file_viewer_fix.py`, `tests/test_config_screen_fix.py`, `tests/test_quick_view_widget_fix.py`.
+
+### Sprint 2 — Refactor: split the monolith (2026-04-23)
+
+#### Changed
+- **`modern_commander.py`** reduced from 2 122 → 1 299 lines (−39 %) by extracting into a new `app/` package with thin delegators remaining in the App class:
+  - `app/file_actions.py` (905 lines) — `FileActionsController` owns F5 copy, F6 move, F7 mkdir, F8 delete, all sync/async variants, worker coroutines.
+  - `app/navigation.py` (283 lines) — `NavigationController` owns panel switching, swap, refresh, goto-dir (with path validation), dir comparison, panel history.
+  - `app/menu_dispatch.py` (204 lines) — `MenuDispatchController` routes action IDs from the F2 menu / top-menu-bar to the appropriate app action.
+
+#### Added — test safety net
+- `tests/characterization/test_app_integration.py` (459 lines, 13 behavioural tests + 3 pre-existing-bug xfails that the Sprint 3 fixes converted to XPASS). Textual `Pilot`-based golden-master tests that guarded the Sprint 2 extraction.
+
 ### Sprint 1 — Integration of existing infrastructure (2026-04-23)
 
 #### Added
