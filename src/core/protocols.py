@@ -474,13 +474,9 @@ class FilePanel:
         entries = self.fs.list_directory(self.current_path)
         self._display_entries(entries)
 
-# Dependency injection in main app:
-container = DependencyContainer()
-container.register(ConfigManager, config_manager)
-container.register(ThemeManager, theme_manager)
-
+# Wiring in main app (constructor injection, no container needed):
 panel = FilePanel(
     filesystem=WindowsFileSystem(),
-    config_provider=container.resolve(ConfigManager)
+    config_provider=config_manager,
 )
 """
