@@ -72,8 +72,7 @@ class FileViewer(Screen):
     }
 
     FileViewer .hex-view {
-        /* font-family is not a valid Textual CSS property; hex content is
-           displayed via Rich Text which inherits the terminal font. */
+        /* terminal font only — font-family is not a valid Textual CSS property */
     }
     """
 
