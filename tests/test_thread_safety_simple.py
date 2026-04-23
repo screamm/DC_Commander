@@ -1,14 +1,16 @@
-"""Simple test for progress_dialog thread safety without complex mocking."""
+"""Simple test for progress_dialog thread safety without complex mocking.
 
-import sys
-import io
+NOTE: This file previously set sys.stdout = io.TextIOWrapper(...) at module
+level, which broke pytest's capture mechanism for the entire test suite by
+replacing the tmpfile that pytest had installed as sys.stdout. The module-
+level replacement has been removed; the encoding issue it was working around
+does not affect the actual assertions in these tests.
+"""
+
 import threading
 import time
 from threading import Lock
 from typing import Optional
-
-# Fix Windows console encoding issues
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 
 class MockProgressDialog:
