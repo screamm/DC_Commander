@@ -38,12 +38,47 @@ A modern, cross-platform Norton Commander-style file manager built with Python a
 
 ## Quick Start
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+## Installation
 
-# Run the application
-python modern_commander.py
+### Windows
+1. Download `dc-commander-setup-<version>.exe` from the [latest release](https://github.com/davidrydgren/dc-commander/releases/latest).
+2. Run the installer (user install, no admin required).
+3. Launch from the Start menu.
+
+**SmartScreen warning?** v1.0.x installers are not code-signed. Click **More info → Run anyway**, and verify the SHA256 checksum from the release page's `SHA256SUMS` file.
+
+### Linux
+```bash
+# AppImage (portable, recommended)
+wget https://github.com/davidrydgren/dc-commander/releases/latest/download/DC_Commander-<version>-x86_64.AppImage
+chmod +x DC_Commander-*.AppImage
+./DC_Commander-*.AppImage
+```
+
+Requires FUSE (`libfuse2` on Debian/Ubuntu). On newer distros where FUSE is absent, use `--appimage-extract-and-run`.
+
+### macOS
+No native installer is shipped for v1.0 (no build agent available). Install from source below.
+
+### From source (any OS)
+```bash
+git clone https://github.com/davidrydgren/dc-commander
+cd dc-commander
+pip install -r requirements.txt    # Python 3.10+
+python run.py
+```
+
+### Verify a download
+```bash
+sha256sum -c SHA256SUMS            # Linux/macOS
+certutil -hashfile <file> SHA256   # Windows — compare against SHA256SUMS
+```
+
+## Quick Start
+
+```bash
+pip install -r requirements.txt
+python run.py
 ```
 
 ## Keyboard Shortcuts
