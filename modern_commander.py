@@ -22,6 +22,10 @@ from textual.screen import Screen
 from textual.widget import Widget
 from textual.worker import Worker, WorkerState
 
+from src.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 # Component imports
 from components.file_panel import FilePanel
 from components.command_bar import CommandBar

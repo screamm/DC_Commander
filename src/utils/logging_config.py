@@ -86,21 +86,27 @@ class LoggingConfig:
         max_bytes: int = 10 * 1024 * 1024,  # 10MB
         backup_count: int = 5,
         console_output: bool = True,
-        file_output: bool = True
+        file_output: bool = True,
+        console_level: int = logging.WARNING,
     ):
         """
         Initialize logging configuration.
 
         Args:
-            log_dir: Directory for log files (default: logs/)
-            log_level: Minimum log level
+            log_dir: Directory for log files
+                (default: ~/.modern_commander/logs/)
+            log_level: Minimum log level for file handlers (default: INFO)
             max_bytes: Maximum size per log file before rotation
             backup_count: Number of backup log files to keep
             console_output: Enable console logging
             file_output: Enable file logging
+            console_level: Minimum log level for console handler
+                (default: WARNING, so Textual TUI is not spammed
+                with INFO/DEBUG lines)
         """
-        self.log_dir = log_dir or Path("logs")
+        self.log_dir = log_dir or (Path.home() / ".modern_commander" / "logs")
         self.log_level = log_level
+        self.console_level = console_level
         self.max_bytes = max_bytes
         self.backup_count = backup_count
         self.console_output = console_output
@@ -114,18 +120,29 @@ class LoggingConfig:
         self._setup_logging()
 
     def _setup_logging(self) -> None:
-        """Set up logging handlers and formatters."""
+        """Set up logging handlers and formatters.
+
+        Idempotent: closes and removes any previously attached handlers
+        before (re-)configuring, so calling setup_logging() twice does not
+        duplicate handlers or leak open file descriptors.
+        """
         # Get root logger
         root_logger = logging.getLogger()
         root_logger.setLevel(self.log_level)
 
-        # Remove existing handlers
-        root_logger.handlers.clear()
+        # Remove existing handlers (close file handlers to avoid FD leaks)
+        for handler in list(root_logger.handlers):
+            try:
+                handler.close()
+            except Exception:  # noqa: BLE001 - best-effort cleanup
+                pass
+            root_logger.removeHandler(handler)
 
-        # Console handler with colors
+        # Console handler with colors (uses console_level, not log_level,
+        # so the TUI terminal is not flooded with INFO/DEBUG lines).
         if self.console_output:
             console_handler = logging.StreamHandler()
-            console_handler.setLevel(self.log_level)
+            console_handler.setLevel(self.console_level)
             console_formatter = DCCommanderFormatter(use_colors=True)
             console_handler.setFormatter(console_formatter)
             root_logger.addHandler(console_handler)
@@ -239,16 +256,24 @@ def setup_logging(
     log_dir: Optional[Path] = None,
     log_level: int = logging.INFO,
     console_output: bool = True,
-    file_output: bool = True
+    file_output: bool = True,
+    console_level: int = logging.WARNING,
 ) -> LoggingConfig:
     """
     Set up application-wide logging.
 
+    Idempotent: safe to call multiple times. Each call reconfigures the
+    root logger without accumulating duplicate handlers.
+
     Args:
         log_dir: Directory for log files
-        log_level: Minimum log level
+            (default: ~/.modern_commander/logs/)
+        log_level: Minimum log level for file handlers (default: INFO)
         console_output: Enable console logging
         file_output: Enable file logging
+        console_level: Minimum log level for console handler
+            (default: WARNING, so the Textual TUI terminal is not flooded
+            with INFO/DEBUG messages during app runtime)
 
     Returns:
         LoggingConfig instance
@@ -259,7 +284,8 @@ def setup_logging(
         log_dir=log_dir,
         log_level=log_level,
         console_output=console_output,
-        file_output=file_output
+        file_output=file_output,
+        console_level=console_level,
     )
 
     return _logging_config
