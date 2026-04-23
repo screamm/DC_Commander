@@ -146,6 +146,25 @@ class QuickViewWidget(Container):
         """
         self.current_file = file_path
 
+    def preview_file(self, file_path: Path) -> None:
+        """Preview the given file.
+
+        Thin wrapper over :meth:`set_file` using the method name expected
+        by the caller in ``modern_commander.py`` (``_update_quick_view``).
+
+        Args:
+            file_path: Path to file to preview
+        """
+        self.set_file(file_path)
+
+    def clear_preview(self) -> None:
+        """Clear the current preview.
+
+        Thin wrapper over :meth:`set_file` using the method name expected
+        by the caller in ``modern_commander.py`` (``_update_quick_view``).
+        """
+        self.set_file(None)
+
     def _generate_preview(self, file_path: Path) -> Union[Text, Syntax, Panel]:
         """Generate preview content for file.
 
