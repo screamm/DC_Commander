@@ -1,0 +1,217 @@
+# =============================================================================
+# DC Commander — Release workflow
+# =============================================================================
+#
+# Triggers on any tag starting with "v" (e.g. v0.9.0, v1.0.0, v1.0.0-rc1).
+# Produces:
+#   - Windows installer  (dc-commander-setup-<VERSION>.exe)   via NSIS
+#   - Linux AppImage     (DC_Commander-<VERSION>-x86_64.AppImage)
+#   - SHA256SUMS         (checksums across all artifacts)
+#
+# No code signing in v1.0.x — users verify integrity via the published
+# SHA256SUMS file attached to each GitHub Release. Code-signing (Windows
+# Authenticode, macOS notarization) is tracked for a later release.
+#
+# Prerelease detection: tags containing "-" (like v1.0.0-rc1) are published
+# as GitHub prereleases; clean tags (v1.0.0) are marked stable.
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # required by softprops/action-gh-release to create releases
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Windows: PyInstaller + NSIS installer
+  # ---------------------------------------------------------------------------
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install project + build deps
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pyinstaller
+
+      - name: Derive version (strip leading 'v')
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag -replace '^v', ''
+          echo "version=$ver" >> $env:GITHUB_OUTPUT
+          echo "Building version: $ver"
+
+      - name: Build executable (PyInstaller)
+        shell: pwsh
+        run: |
+          python build_exe.py
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          # makensis is installed under C:\Program Files (x86)\NSIS on windows-latest.
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) {
+            # Fallback: look it up on PATH.
+            $makensis = (Get-Command makensis.exe -ErrorAction Stop).Source
+          }
+          & $makensis "/DVERSION=${{ steps.version.outputs.version }}" "installer\windows\dc-commander.nsi"
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer/windows/dc-commander-setup-*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Linux: PyInstaller + appimagetool
+  # ---------------------------------------------------------------------------
+  build-linux:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install system deps (libfuse2 for AppImage runtime)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 wget
+
+      - name: Install project + build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pyinstaller
+
+      - name: Install appimagetool
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          wget -qO "$HOME/.local/bin/appimagetool" \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x "$HOME/.local/bin/appimagetool"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Derive version (strip leading 'v')
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          VER="${TAG#v}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Building version: $VER"
+
+      - name: Build AppImage
+        run: |
+          chmod +x installer/linux/build_appimage.sh
+          ./installer/linux/build_appimage.sh --version "${{ steps.version.outputs.version }}"
+
+      - name: Upload Linux AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: DC_Commander-*-x86_64.AppImage
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Release: aggregate, checksum, publish
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts into a single dir
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.exe' -o -name '*.AppImage' \) \
+            -exec cp -v {} release/ \;
+          ls -la release/
+
+      - name: Generate SHA256SUMS
+        working-directory: release
+        run: |
+          # Cover both shapes (*.exe and *.AppImage). `sha256sum` will exit
+          # non-zero if a glob matches nothing and we shell-quote it, so we
+          # pass all files explicitly.
+          sha256sum *.exe *.AppImage > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ "$TAG" == *-* ]]; then
+            echo "value=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compose release body
+        id: body
+        run: |
+          {
+            echo 'body<<RELEASE_EOF'
+            echo 'See CHANGELOG.md for details.'
+            echo ''
+            echo '## Checksums'
+            echo ''
+            echo '```'
+            cat release/SHA256SUMS
+            echo '```'
+            echo 'RELEASE_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.body.outputs.body }}
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.value }}
+          files: |
+            release/*.exe
+            release/*.AppImage
+            release/SHA256SUMS
+          fail_on_unmatched_files: true
