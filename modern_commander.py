@@ -70,6 +70,7 @@ from src.core.ui_security import (
 # Controllers — purpose-driven composition modules that own slices of
 # behaviour previously inlined in this monolith. See app/__init__.py.
 from app.file_actions import FileActionsController
+from app.menu_dispatch import MenuDispatchController
 from app.navigation import NavigationController
 
 
@@ -217,6 +218,9 @@ class ModernCommanderApp(App):
         # all state they read is established.
         self._file_actions: FileActionsController = FileActionsController(self)
         self._navigation: NavigationController = NavigationController(self)
+        self._menu_dispatch: MenuDispatchController = MenuDispatchController(
+            self
+        )
 
     @property
     def progress_dialog(self) -> Optional[ProgressDialog]:
@@ -1127,138 +1131,29 @@ Use F2 menu → Left/Right → Brief/Full to change view mode."""
     def _execute_menu_action(self, action: str) -> None:
         """Execute menu action from F2 menu system.
 
+        Delegates to :class:`MenuDispatchController`.
+
         Args:
             action: Action identifier from menu
         """
-        # Left panel actions
-        if action.startswith("left_"):
-            panel = self.left_panel
-            action_type = action[5:]  # Remove "left_" prefix
-            self._execute_panel_action(panel, action_type, "left")
+        self._menu_dispatch.execute_menu_action(action)
 
-        # Right panel actions
-        elif action.startswith("right_"):
-            panel = self.right_panel
-            action_type = action[6:]  # Remove "right_" prefix
-            self._execute_panel_action(panel, action_type, "right")
-
-        # File operations
-        elif action == "view_file":
-            self.action_view_file()
-        elif action == "edit_file":
-            self.action_edit_file()
-        elif action == "copy_files":
-            self.action_copy_files()
-        elif action == "move_files":
-            self.action_move_files()
-        elif action == "create_dir":
-            self.action_create_directory()
-        elif action == "delete_files":
-            self.action_delete_files()
-
-        # Selection operations
-        elif action == "select_group":
-            active_panel = self._get_active_panel()
-            active_panel.action_select_group()
-        elif action == "deselect_group":
-            active_panel = self._get_active_panel()
-            active_panel.action_deselect_group()
-        elif action == "invert_selection":
-            active_panel = self._get_active_panel()
-            active_panel.action_invert_selection()
-
-        # Command operations
-        elif action == "find_file":
-            self.action_find_file()
-        elif action == "toggle_quick_view":
-            self.action_toggle_quick_view()
-        elif action == "refresh_panels":
-            self.action_refresh_panels()
-        elif action == "compare_dirs":
-            self.action_compare_dirs()
-        elif action == "swap_panels":
-            self.action_swap_panels()
-        elif action == "panel_history":
-            self.action_panel_history()
-        elif action == "goto_dir":
-            self.action_goto_dir()
-
-        # Options
-        elif action == "show_config":
-            self.action_show_config()
-        elif action == "cycle_theme":
-            self.action_cycle_theme()
-        elif action == "toggle_hidden":
-            self.action_toggle_hidden()
-        elif action == "toggle_sizes":
-            self.action_toggle_sizes()
-        elif action == "toggle_dates":
-            self.action_toggle_dates()
-        elif action == "save_setup":
-            self.action_save_setup()
-
-        else:
-            self.notify(f"Action not implemented: {action}", severity="warning")
-
-    def _execute_panel_action(self, panel: Optional[FilePanel], action_type: str, panel_name: str) -> None:
+    def _execute_panel_action(
+        self,
+        panel: Optional[FilePanel],
+        action_type: str,
+        panel_name: str,
+    ) -> None:
         """Execute panel-specific action.
+
+        Delegates to :class:`MenuDispatchController`.
 
         Args:
             panel: Target panel
             action_type: Type of action (brief, full, sort_name, etc.)
             panel_name: Panel identifier ("left" or "right")
         """
-        if not panel:
-            return
-
-        # View mode actions
-        if action_type == "brief":
-            from features.view_modes import ViewMode
-            panel.set_view_mode(ViewMode.BRIEF)
-        elif action_type == "full":
-            from features.view_modes import ViewMode
-            panel.set_view_mode(ViewMode.FULL)
-        elif action_type == "tree":
-            # Tree view is not yet implemented - fallback to brief view
-            from features.view_modes import ViewMode
-            panel.set_view_mode(ViewMode.BRIEF)
-            self.notify(f"{panel_name.title()} panel: Tree view (using brief view as fallback)", severity="information")
-        elif action_type == "info":
-            from features.view_modes import ViewMode
-            import platform
-            if platform.system() == "Windows":
-                # Info view requires Unix permissions - fallback to full view on Windows
-                panel.set_view_mode(ViewMode.FULL)
-                self.notify(f"{panel_name.title()} panel: Info view (not available on Windows, using full view)", severity="information")
-            else:
-                panel.set_view_mode(ViewMode.INFO)
-
-        # Sort actions
-        elif action_type == "sort_name":
-            panel.sort_column = "name"
-            panel.sort_reverse = False
-            panel.refresh_directory()
-            self.notify(f"{panel_name.title()} panel: Sorted by name")
-        elif action_type == "sort_ext":
-            panel.sort_column = "ext"
-            panel.sort_reverse = False
-            panel.refresh_directory()
-            self.notify(f"{panel_name.title()} panel: Sorted by extension")
-        elif action_type == "sort_size":
-            panel.sort_column = "size"
-            panel.sort_reverse = True  # Largest first
-            panel.refresh_directory()
-            self.notify(f"{panel_name.title()} panel: Sorted by size")
-        elif action_type == "sort_date":
-            panel.sort_column = "date"
-            panel.sort_reverse = True  # Newest first
-            panel.refresh_directory()
-            self.notify(f"{panel_name.title()} panel: Sorted by date")
-
-        # Refresh action
-        elif action_type == "refresh":
-            panel.refresh_directory()
-            self.notify(f"{panel_name.title()} panel refreshed")
+        self._menu_dispatch.execute_panel_action(panel, action_type, panel_name)
 
     # File operations — delegated to FileActionsController.
     # These thin wrappers are retained so that legacy call sites
