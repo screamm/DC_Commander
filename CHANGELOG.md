@@ -4,6 +4,28 @@ All notable changes to DC Commander will be documented in this file.
 
 ## [Unreleased]
 
+### Sprint 1 — Integration of existing infrastructure (2026-04-23)
+
+#### Added
+- **Central logging** via `src/utils/logging_config.setup_logging()` called from `run.py`; rotating file handlers in `~/.modern_commander/logs/dc_commander_YYYYMMDD.log` (10 MB × 5 backups) plus a separate ERROR-only log; console output at WARNING+ so the TUI terminal stays clean.
+- **Global crash reporter** via `sys.excepthook` (`src/utils/crash_reporter.py`). Uncaught exceptions produce a dump in `~/.modern_commander/crashes/YYYY-MM-DD_HHMMSS.txt` with full traceback, environment info, and the last 100 log lines. The original excepthook is chained so stderr stack traces still appear.
+- **Rich ErrorDialog** (`components/dialogs.py`) with Retry / Cancel, expandable technical details (press `d`), `Escape` cancels, `Enter` activates Retry if allowed.
+- **UIValidationError** and `src/core/ui_security.py` helpers (`validate_user_filename`, `validate_user_path`) wired into F7 mkdir and goto-path prompts. Path-traversal, null bytes, reserved Windows names, and invalid characters are rejected with user-friendly errors and a retry loop that preserves the user's entry.
+- **Error-to-user-message mapping** via `src/core/error_messages.format_user_error()` covering `PermissionError`, `FileNotFoundError`, `IsADirectoryError`, `FileExistsError`, `OSError` (ENOSPC, ENAMETOOLONG), custom file-operation exceptions, and a generic fallback.
+- **Issue templates** (bug report, feature request) under `.github/ISSUE_TEMPLATE/`.
+
+#### Changed
+- F5/F6/F7/F8 handlers in `modern_commander.py` now wrap the dispatch path with an `ErrorBoundary`-style try/except that logs via `logger.exception()` and surfaces an `ErrorDialog`. Single-retry semantics prevent infinite loops.
+- `claudedocs/` layout: 94 historical status reports moved to `claudedocs/archive/2025/`; canonical references kept at the root (ACTUAL_ARCHITECTURE, architecture, API, PLUGIN_API).
+
+#### Removed
+- `coordinators/` (5 files, 882 lines of unused code) — never imported from production.
+- `src/di/` (258 lines) and `src/core/dependency_container.py` (141 lines) — two incompatible DI containers, zero production callers. Plain constructor injection is sufficient for this app's scale.
+- `tests/test_di_integration.py` (477 lines) — the only remaining caller of the deleted DI containers.
+
+#### Tests
+- Added 107 tests across 6 new files: `test_logging.py` (4), `test_crash_reporter.py` (6), `test_error_messages.py` (17), `test_error_dialog.py` (12), `test_error_boundary_integration.py` (3 + 1 skipped), `test_ui_security.py` (65 including a 100-payload fuzz suite).
+
 ### Added - Production-Ready Features
 
 #### UI Enhancements

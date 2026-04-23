@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussion
+    url: https://github.com/davidrydgren/dc-commander/discussions
+    about: Ask how to use DC Commander, share tips, or discuss ideas.
