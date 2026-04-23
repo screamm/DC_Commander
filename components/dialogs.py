@@ -284,38 +284,188 @@ class MessageDialog(BaseDialog):
             self.query_one("#ok", Button).press()
 
 
-class ErrorDialog(MessageDialog):
-    """Error message dialog with danger styling."""
+class ErrorDialog(BaseDialog):
+    """Error dialog with optional Retry/Cancel and expandable technical details.
+
+    The dialog dismisses with one of:
+        - "retry" when the user chooses Retry (only if ``allow_retry=True``)
+        - "cancel" when the user chooses Cancel / OK / presses Escape
+        - ``None`` only if forcibly dismissed by the framework
+
+    Backward compat: older callers of ``ErrorDialog(message, title=...)``
+    keep working because the new keyword-only parameters have defaults.
+    Those callers historically received either ``True`` or ``None`` from
+    ``dismiss`` via ``MessageDialog`` and usually ignored the value;
+    the new return value ("cancel"/"retry"/None) is truthy in both
+    cases where they expected truthy, so this stays compatible.
+    """
 
     DEFAULT_CSS = """
+    ErrorDialog > Container {
+        min-width: 50;
+        max-width: 90;
+    }
+
     ErrorDialog .dialog-title {
         background: $error;
         color: $text;
+    }
+
+    ErrorDialog .error-message {
+        margin-bottom: 1;
+        min-width: 40;
+    }
+
+    ErrorDialog .details-static {
+        display: none;
+        height: auto;
+        max-height: 15;
+        border: solid $accent;
+        padding: 0 1;
+        background: $surface-darken-1;
+        color: $text;
+        overflow-y: auto;
+        margin-bottom: 1;
+    }
+
+    ErrorDialog .details-static.visible {
+        display: block;
     }
     """
 
     def __init__(
         self,
         message: str,
+        *,
         title: str = "Error",
-        on_close: Optional[Callable[[], None]] = None,
+        details: Optional[str] = None,
+        allow_retry: bool = False,
+        allow_cancel: bool = True,
+        on_close: Optional[Callable[[Optional[str]], None]] = None,
         name: Optional[str] = None,
     ) -> None:
         """Initialize error dialog.
 
         Args:
-            message: Error message
-            title: Dialog title
-            on_close: Callback for close
-            name: Widget name
+            message: User-facing error message (shown prominently).
+            title: Dialog title. Defaults to ``"Error"``.
+            details: Optional technical details (stack trace etc.) shown
+                under a collapsible ``Details`` section. ``None`` hides
+                the Details button entirely.
+            allow_retry: When ``True`` the dialog shows a Retry button
+                that dismisses with ``"retry"``. Defaults to ``False``.
+            allow_cancel: When ``True`` the dialog shows a Cancel/OK
+                button. Defaults to ``True``. Both flags may not be
+                ``False`` simultaneously; if they are, a default Cancel
+                button is still rendered so the dialog is dismissable.
+            on_close: Callback invoked with the action string before
+                ``dismiss``. Signature: ``Callable[[Optional[str]], None]``.
+            name: Widget name.
         """
-        super().__init__(
-            title=title,
-            message=message,
-            message_type="error",
-            on_close=on_close,
-            name=name,
-        )
+        super().__init__(title, name=name)
+        self.message = message
+        self.details = details
+        self.allow_retry = allow_retry
+        # If the caller asks for neither cancel nor retry we still need
+        # an escape hatch. Force a cancel button in that pathological case.
+        self.allow_cancel = allow_cancel or not allow_retry
+        self.on_close_callback = on_close
+        self._details_visible = False
+
+    def compose(self) -> ComposeResult:
+        """Compose dialog widgets."""
+        with Container():
+            yield Static(self.dialog_title, classes="dialog-title")
+            yield Static(self.message, classes="error-message", id="error_message")
+
+            # Details panel, hidden by default
+            if self.details:
+                yield Static(
+                    self.details,
+                    classes="details-static",
+                    id="error_details",
+                )
+
+            with Horizontal(classes="dialog-buttons"):
+                if self.details:
+                    yield Button(
+                        "Details",
+                        variant="default",
+                        id="details_toggle",
+                    )
+                if self.allow_retry:
+                    yield Button(
+                        "Retry",
+                        variant="primary",
+                        id="retry",
+                        classes="primary-button",
+                    )
+                if self.allow_cancel:
+                    # Label is "Cancel" when retry is present, else "OK"
+                    cancel_label = "Cancel" if self.allow_retry else "OK"
+                    button_variant = (
+                        "default" if self.allow_retry else "primary"
+                    )
+                    button_classes = (
+                        "" if self.allow_retry else "primary-button"
+                    )
+                    yield Button(
+                        cancel_label,
+                        variant=button_variant,
+                        id="cancel",
+                        classes=button_classes,
+                    )
+
+    def _toggle_details(self) -> None:
+        """Toggle visibility of the details panel."""
+        if not self.details:
+            return
+        try:
+            details_widget = self.query_one("#error_details", Static)
+        except Exception:
+            return
+        self._details_visible = not self._details_visible
+        if self._details_visible:
+            details_widget.add_class("visible")
+        else:
+            details_widget.remove_class("visible")
+
+    def _dismiss_with(self, action: Optional[str]) -> None:
+        """Invoke the on_close callback and dismiss with the given action."""
+        if self.on_close_callback:
+            try:
+                self.on_close_callback(action)
+            except Exception:
+                # Callbacks must never prevent dismissal of an error dialog.
+                pass
+        self.dismiss(action)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "details_toggle":
+            self._toggle_details()
+            return
+        if event.button.id == "retry":
+            self._dismiss_with("retry")
+            return
+        if event.button.id == "cancel":
+            self._dismiss_with("cancel")
+            return
+
+    def on_key(self, event) -> None:
+        """Handle keyboard input."""
+        key = event.key
+        if key == "escape":
+            # Escape always cancels.
+            self._dismiss_with("cancel")
+        elif key == "enter":
+            # Enter triggers Retry if available, else Cancel/OK.
+            if self.allow_retry:
+                self._dismiss_with("retry")
+            elif self.allow_cancel:
+                self._dismiss_with("cancel")
+        elif key == "d":
+            self._toggle_details()
 
 
 class ProgressDialog(BaseDialog):
