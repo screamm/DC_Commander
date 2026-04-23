@@ -70,6 +70,7 @@ from src.core.ui_security import (
 # Controllers — purpose-driven composition modules that own slices of
 # behaviour previously inlined in this monolith. See app/__init__.py.
 from app.file_actions import FileActionsController
+from app.navigation import NavigationController
 
 
 class ModernCommanderApp(App):
@@ -215,6 +216,7 @@ class ModernCommanderApp(App):
         # Controllers (purpose-driven composition). Instantiate after
         # all state they read is established.
         self._file_actions: FileActionsController = FileActionsController(self)
+        self._navigation: NavigationController = NavigationController(self)
 
     @property
     def progress_dialog(self) -> Optional[ProgressDialog]:
@@ -783,28 +785,20 @@ class ModernCommanderApp(App):
 
     # Actions - Panel Management
     def action_switch_panel(self) -> None:
-        """Switch active panel (TAB key)."""
-        # Toggle active panel
-        self.active_panel = "right" if self.active_panel == "left" else "left"
+        """Switch active panel (TAB key).
 
-        # Update borders
-        self._update_panel_borders()
-
-        # Focus new active panel
-        active_panel = self._get_active_panel()
-        active_panel.focus()
-
-        # Update Quick View for new active panel
-        self._update_quick_view()
+        Delegates to :class:`NavigationController`.
+        """
+        self._navigation.switch_panel()
 
     def action_refresh_panels(self) -> None:
-        """Refresh both panels."""
-        if self.left_panel:
-            self.left_panel.refresh_directory()
-        if self.right_panel:
-            self.right_panel.refresh_directory()
+        """Refresh both panels.
 
-        self.notify("Panels refreshed")
+        Delegates to :class:`NavigationController`. Retained on the
+        app class because ``FileActionsController`` and several other
+        call sites invoke ``app.action_refresh_panels()`` directly.
+        """
+        self._navigation.refresh_panels()
 
     def action_toggle_hidden(self) -> None:
         """Toggle hidden files visibility (Ctrl+H)."""
@@ -1035,184 +1029,33 @@ Escape - Clear selection
         self.push_screen(dialog, callback=handle_file_selected)
 
     def action_swap_panels(self) -> None:
-        """Swap directories between left and right panels."""
-        if self.left_panel and self.right_panel:
-            # Get current paths
-            left_path = self.left_panel.current_path
-            right_path = self.right_panel.current_path
+        """Swap directories between left and right panels.
 
-            # Swap paths
-            self.left_panel.navigate_to(right_path)
-            self.right_panel.navigate_to(left_path)
-
-            self.notify("Panels swapped")
+        Delegates to :class:`NavigationController`.
+        """
+        self._navigation.swap_panels()
 
     def action_goto_dir(self) -> None:
         """Navigate active panel to a specific directory.
 
-        User input is validated via :func:`validate_user_path` before
-        navigation. The path is resolved, checked for existence, and
-        must point at a directory. Invalid input shows a retry-capable
-        :class:`ErrorDialog`.
+        Delegates to :class:`NavigationController`. See the controller
+        docstring for validation behaviour.
         """
-        active_panel = self._get_active_panel()
-        placeholder = str(active_panel.current_path)
-
-        def prompt(default: str = "") -> None:
-            """Open the goto-directory InputDialog (retry-reusable)."""
-
-            def handle_input(dir_path: Optional[str]) -> None:
-                if not dir_path:
-                    return
-                try:
-                    target_path = validate_user_path(
-                        dir_path, must_exist=True
-                    )
-                except UIValidationError as exc:
-                    def on_close(action: Optional[str]) -> None:
-                        if action == "retry":
-                            prompt(default=dir_path)
-
-                    self.push_screen(
-                        ErrorDialog(
-                            message=exc.user_message,
-                            title="Invalid input",
-                            details=exc.technical_details,
-                            allow_retry=True,
-                            allow_cancel=True,
-                            on_close=on_close,
-                        )
-                    )
-                    return
-
-                if not target_path.is_dir():
-                    logger.warning(
-                        "Goto directory: %r resolved to %s which is "
-                        "not a directory",
-                        dir_path,
-                        target_path,
-                    )
-
-                    def on_close(action: Optional[str]) -> None:
-                        if action == "retry":
-                            prompt(default=dir_path)
-
-                    self.push_screen(
-                        ErrorDialog(
-                            message="Not a directory.",
-                            title="Invalid input",
-                            details=(
-                                f"{target_path} exists but is not a "
-                                "directory."
-                            ),
-                            allow_retry=True,
-                            allow_cancel=True,
-                            on_close=on_close,
-                        )
-                    )
-                    return
-
-                active_panel.navigate_to(target_path)
-
-            dialog = InputDialog(
-                title="Go to Directory",
-                message="Enter directory path:",
-                placeholder=placeholder,
-                default=default,
-                on_submit=handle_input,
-            )
-            self.push_screen(dialog)
-
-        prompt()
+        self._navigation.goto_dir()
 
     def action_compare_dirs(self) -> None:
-        """Compare directories between left and right panels."""
-        if not self.left_panel or not self.right_panel:
-            return
+        """Compare directories between left and right panels.
 
-        # Get file lists from both panels
-        left_files = {item.name: item for item in self.left_panel._file_items if not item.is_parent}
-        right_files = {item.name: item for item in self.right_panel._file_items if not item.is_parent}
-
-        # Find differences
-        only_left = set(left_files.keys()) - set(right_files.keys())
-        only_right = set(right_files.keys()) - set(left_files.keys())
-        common = set(left_files.keys()) & set(right_files.keys())
-
-        # Find files with different sizes or dates
-        different = []
-        for name in common:
-            left_item = left_files[name]
-            right_item = right_files[name]
-            if left_item.size != right_item.size or left_item.modified != right_item.modified:
-                different.append(name)
-
-        # Build comparison message
-        message_lines = [
-            f"**Left panel**: {self.left_panel.current_path}",
-            f"**Right panel**: {self.right_panel.current_path}",
-            "",
-            f"**Only in left**: {len(only_left)} file(s)",
-            f"**Only in right**: {only_right} file(s)",
-            f"**Different**: {len(different)} file(s)",
-            f"**Identical**: {len(common) - len(different)} file(s)",
-        ]
-
-        if only_left:
-            message_lines.append("")
-            message_lines.append("**Files only in left:**")
-            for name in sorted(list(only_left)[:10]):  # Show first 10
-                message_lines.append(f"  • {name}")
-            if len(only_left) > 10:
-                message_lines.append(f"  ... and {len(only_left) - 10} more")
-
-        if only_right:
-            message_lines.append("")
-            message_lines.append("**Files only in right:**")
-            for name in sorted(list(only_right)[:10]):  # Show first 10
-                message_lines.append(f"  • {name}")
-            if len(only_right) > 10:
-                message_lines.append(f"  ... and {len(only_right) - 10} more")
-
-        if different:
-            message_lines.append("")
-            message_lines.append("**Files with differences:**")
-            for name in sorted(different[:10]):  # Show first 10
-                message_lines.append(f"  • {name}")
-            if len(different) > 10:
-                message_lines.append(f"  ... and {len(different) - 10} more")
-
-        dialog = MessageDialog(
-            title="Compare Directories",
-            message="\n".join(message_lines),
-            message_type="info"
-        )
-        self.push_screen(dialog)
+        Delegates to :class:`NavigationController`.
+        """
+        self._navigation.compare_dirs()
 
     def action_panel_history(self) -> None:
-        """Show panel navigation history."""
-        active_panel = self._get_active_panel()
+        """Show panel navigation history (stub dialog).
 
-        # For now, show a placeholder - full history tracking would require maintaining a history list
-        # This could be enhanced by adding a history stack to FilePanel
-        message = f"""**Panel History**
-
-Current directory:
-  {active_panel.current_path}
-
-**Note**: Full navigation history tracking will be available in a future version.
-
-For now, you can use:
-  • Backspace - Go to parent directory
-  • Ctrl+F - Find file in directory tree
-  • Enter - Navigate into selected directory"""
-
-        dialog = MessageDialog(
-            title="Panel History",
-            message=message,
-            message_type="info"
-        )
-        self.push_screen(dialog)
+        Delegates to :class:`NavigationController`.
+        """
+        self._navigation.panel_history()
 
     def action_toggle_sizes(self) -> None:
         """Toggle file size display in panels."""
