@@ -60,6 +60,13 @@ from services.file_service_async import AsyncFileService, AsyncOperationProgress
 from src.core.error_boundary import ErrorBoundary, get_error_boundary
 from src.core.error_messages import format_user_error
 
+# UI-level input validation (security + UX wrapper around src.core.security)
+from src.core.ui_security import (
+    UIValidationError,
+    validate_user_filename,
+    validate_user_path,
+)
+
 
 class ModernCommanderApp(App):
     """Modern Commander - Dual-pane file manager application."""
@@ -1036,21 +1043,59 @@ Escape - Clear selection
         self.push_screen(dialog, callback=handle_confirm)
 
     def action_create_directory(self) -> None:
-        """F7 - Create new directory."""
+        """F7 - Create new directory.
+
+        User input is validated via :func:`validate_user_filename`
+        before any filesystem call. Invalid input surfaces an
+        :class:`ErrorDialog` with Retry; on Retry the :class:`InputDialog`
+        is reopened with the last attempted value preserved so the user
+        can correct their entry.
+        """
         active_panel = self._get_active_panel()
+        parent_path = active_panel.current_path
 
-        def handle_input(dir_name: Optional[str]) -> None:
-            if dir_name:
-                self._perform_create_directory(active_panel.current_path, dir_name)
+        def prompt(default: str = "") -> None:
+            """Open the create-directory InputDialog (retry-reusable)."""
 
-        dialog = InputDialog(
-            title="Create Directory",
-            message="Enter directory name:",
-            placeholder="New Folder",
-            on_submit=handle_input
-        )
+            def handle_input(dir_name: Optional[str]) -> None:
+                if dir_name is None:
+                    # User cancelled — nothing to do.
+                    return
+                try:
+                    safe_name = validate_user_filename(dir_name)
+                except UIValidationError as exc:
+                    # Validator already emitted logger.warning. Re-prompt
+                    # through an ErrorDialog(retry=True) that, on retry,
+                    # reopens the InputDialog with the bad input so the
+                    # user can edit it instead of retyping from scratch.
+                    def on_close(action: Optional[str]) -> None:
+                        if action == "retry":
+                            prompt(default=dir_name)
 
-        self.push_screen(dialog)  # Removed duplicate callback parameter
+                    self.push_screen(
+                        ErrorDialog(
+                            message=exc.user_message,
+                            title="Invalid input",
+                            details=exc.technical_details,
+                            allow_retry=True,
+                            allow_cancel=True,
+                            on_close=on_close,
+                        )
+                    )
+                    return
+
+                self._perform_create_directory(parent_path, safe_name)
+
+            dialog = InputDialog(
+                title="Create Directory",
+                message="Enter directory name:",
+                placeholder="New Folder",
+                default=default,
+                on_submit=handle_input,
+            )
+            self.push_screen(dialog)
+
+        prompt()
 
     def action_delete_files(self) -> None:
         """F8 - Delete selected files."""
@@ -1162,28 +1207,82 @@ Escape - Clear selection
             self.notify("Panels swapped")
 
     def action_goto_dir(self) -> None:
-        """Navigate active panel to a specific directory."""
+        """Navigate active panel to a specific directory.
+
+        User input is validated via :func:`validate_user_path` before
+        navigation. The path is resolved, checked for existence, and
+        must point at a directory. Invalid input shows a retry-capable
+        :class:`ErrorDialog`.
+        """
         active_panel = self._get_active_panel()
+        placeholder = str(active_panel.current_path)
 
-        def handle_input(dir_path: Optional[str]) -> None:
-            if dir_path:
+        def prompt(default: str = "") -> None:
+            """Open the goto-directory InputDialog (retry-reusable)."""
+
+            def handle_input(dir_path: Optional[str]) -> None:
+                if not dir_path:
+                    return
                 try:
-                    target_path = Path(dir_path).expanduser().resolve()
-                    if target_path.is_dir():
-                        active_panel.navigate_to(target_path)
-                    else:
-                        self.notify(f"Not a directory: {dir_path}", severity="error")
-                except Exception as e:
-                    self.notify(f"Invalid path: {e}", severity="error")
+                    target_path = validate_user_path(
+                        dir_path, must_exist=True
+                    )
+                except UIValidationError as exc:
+                    def on_close(action: Optional[str]) -> None:
+                        if action == "retry":
+                            prompt(default=dir_path)
 
-        dialog = InputDialog(
-            title="Go to Directory",
-            message="Enter directory path:",
-            placeholder=str(active_panel.current_path),
-            on_submit=handle_input
-        )
+                    self.push_screen(
+                        ErrorDialog(
+                            message=exc.user_message,
+                            title="Invalid input",
+                            details=exc.technical_details,
+                            allow_retry=True,
+                            allow_cancel=True,
+                            on_close=on_close,
+                        )
+                    )
+                    return
 
-        self.push_screen(dialog)  # Removed duplicate callback parameter
+                if not target_path.is_dir():
+                    logger.warning(
+                        "Goto directory: %r resolved to %s which is "
+                        "not a directory",
+                        dir_path,
+                        target_path,
+                    )
+
+                    def on_close(action: Optional[str]) -> None:
+                        if action == "retry":
+                            prompt(default=dir_path)
+
+                    self.push_screen(
+                        ErrorDialog(
+                            message="Not a directory.",
+                            title="Invalid input",
+                            details=(
+                                f"{target_path} exists but is not a "
+                                "directory."
+                            ),
+                            allow_retry=True,
+                            allow_cancel=True,
+                            on_close=on_close,
+                        )
+                    )
+                    return
+
+                active_panel.navigate_to(target_path)
+
+            dialog = InputDialog(
+                title="Go to Directory",
+                message="Enter directory path:",
+                placeholder=placeholder,
+                default=default,
+                on_submit=handle_input,
+            )
+            self.push_screen(dialog)
+
+        prompt()
 
     def action_compare_dirs(self) -> None:
         """Compare directories between left and right panels."""
