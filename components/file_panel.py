@@ -686,9 +686,12 @@ class FilePanel(Container):
         ("ctrl+s", "cycle_sort", "Sort"),
         ("ctrl+d", "toggle_sort_direction", "Reverse"),
         ("ctrl+v", "cycle_view_mode", "View Mode"),
-        ("kp_plus", "group_select", "Select Group"),
-        ("kp_minus", "group_deselect", "Deselect Group"),
-        ("kp_multiply", "invert_selection", "Invert Selection"),
+        # Numpad gray keys: kp_* names for Windows Terminal / cmd.exe /
+        # PowerShell; plain plus/minus/asterisk for terminals that report
+        # the symbol name directly (xterm, GNOME Terminal, some configs).
+        ("kp_plus,plus", "group_select", "Select Group"),
+        ("kp_minus,minus", "group_deselect", "Deselect Group"),
+        ("kp_multiply,asterisk", "invert_selection", "Invert Selection"),
     ]
 
     def action_navigate_up(self) -> None:
