@@ -199,10 +199,10 @@ class ConfigScreen(ModalScreen):
                 with Horizontal(classes="config-row"):
                     yield Label("Sort By:", classes="config-label")
                     sort_options = [
-                        ("name", "Name"),
-                        ("size", "Size"),
-                        ("date", "Date"),
-                        ("extension", "Extension")
+                        ("Name", "name"),
+                        ("Size", "size"),
+                        ("Date", "date"),
+                        ("Extension", "extension"),
                     ]
                     yield Select(
                         sort_options,
@@ -235,10 +235,10 @@ class ConfigScreen(ModalScreen):
                 with Horizontal(classes="config-row"):
                     yield Label("Sort By:", classes="config-label")
                     sort_options = [
-                        ("name", "Name"),
-                        ("size", "Size"),
-                        ("date", "Date"),
-                        ("extension", "Extension")
+                        ("Name", "name"),
+                        ("Size", "size"),
+                        ("Date", "date"),
+                        ("Extension", "extension"),
                     ]
                     yield Select(
                         sort_options,
@@ -271,11 +271,11 @@ class ConfigScreen(ModalScreen):
                 with Horizontal(classes="config-row"):
                     yield Label("File Size Format:", classes="config-label")
                     size_options = [
-                        ("auto", "Auto"),
-                        ("bytes", "Bytes"),
-                        ("kb", "KB"),
-                        ("mb", "MB"),
-                        ("gb", "GB")
+                        ("Auto", "auto"),
+                        ("Bytes", "bytes"),
+                        ("KB", "kb"),
+                        ("MB", "mb"),
+                        ("GB", "gb"),
                     ]
                     yield Select(
                         size_options,
