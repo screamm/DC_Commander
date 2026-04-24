@@ -49,3 +49,9 @@ Desktop.ini
 
 # Project specific
 claudedocs/
+
+# Built binary releases — published to GitHub Releases, not git
+Releases/
+
+# MSYS/MinGW crash artifact on Windows
+bash.exe.stackdump
