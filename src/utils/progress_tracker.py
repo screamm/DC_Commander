@@ -11,7 +11,7 @@ Provides accurate progress reporting with:
 
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Deque
+from typing import Any, Optional, Deque
 from collections import deque
 import logging
 
@@ -258,7 +258,7 @@ class ProgressTracker:
         return (self.files_completed >= self.total_files and
                 self.current_bytes >= self.total_bytes)
 
-    def get_summary(self) -> dict:
+    def get_summary(self) -> dict[str, Any]:
         """Get summary of progress.
 
         Returns:

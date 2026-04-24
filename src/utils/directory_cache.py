@@ -20,7 +20,7 @@ Usage:
 """
 
 from pathlib import Path
-from typing import Optional, List, Callable, TypeVar, Generic
+from typing import Any, Optional, List, Callable, TypeVar, Generic
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from threading import Lock
@@ -216,7 +216,7 @@ class DirectoryCache(Generic[T]):
                 return 0.0
             return (self._hits / total) * 100.0
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 

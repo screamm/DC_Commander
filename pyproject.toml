@@ -237,8 +237,25 @@ module = [
     "textual.*",
     "rich.*",
     "psutil.*",
+    "aiofiles.*",
+    "chardet.*",
 ]
 ignore_missing_imports = true
+
+# Sprint 3 (S3.1): enable mypy --strict for src.utils.* only. Other backend
+# modules will be migrated in follow-up commits.
+[[tool.mypy.overrides]]
+module = "src.utils.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_any_generics = true
+disallow_untyped_decorators = true
+disallow_subclassing_any = true
+warn_return_any = true
+no_implicit_reexport = true
+strict_equality = true
+extra_checks = true
 
 # ============================================================================
 # PYTEST - Testing Framework

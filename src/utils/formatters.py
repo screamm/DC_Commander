@@ -7,11 +7,12 @@ def format_file_size(size: int) -> str:
     """Format file size for display."""
     if size < 0:
         return "0 B"
+    size_f: float = float(size)
     for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size < 1024.0:
-            return f"{size:3.1f} {unit}"
-        size /= 1024.0
-    return f"{size:.1f} PB"
+        if size_f < 1024.0:
+            return f"{size_f:3.1f} {unit}"
+        size_f /= 1024.0
+    return f"{size_f:.1f} PB"
 
 
 def format_date(dt: datetime) -> str:

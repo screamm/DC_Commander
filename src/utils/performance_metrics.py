@@ -14,7 +14,7 @@ import logging
 import psutil
 from functools import wraps
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Callable, Any, TypeVar, cast
 from collections import deque, defaultdict
 from datetime import datetime
 import asyncio
@@ -22,6 +22,8 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 perf_logger = logging.getLogger('dc_commander.performance')
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 @dataclass
@@ -78,7 +80,9 @@ class PerformanceMonitor:
         # For regression detection
         self.baseline_durations: Dict[str, float] = {}
 
-    def track_operation(self, operation_name: str, category: str = "general"):
+    def track_operation(
+        self, operation_name: str, category: str = "general"
+    ) -> Callable[[F], F]:
         """Decorator to track operation performance.
 
         Args:
@@ -88,30 +92,30 @@ class PerformanceMonitor:
         Returns:
             Decorator function
         """
-        def decorator(func: Callable) -> Callable:
+        def decorator(func: F) -> F:
             if asyncio.iscoroutinefunction(func):
                 @wraps(func)
-                async def async_wrapper(*args, **kwargs):
+                async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                     return await self._track_async_operation(
                         func, operation_name, category, *args, **kwargs
                     )
-                return async_wrapper
+                return cast(F, async_wrapper)
             else:
                 @wraps(func)
-                def sync_wrapper(*args, **kwargs):
+                def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                     return self._track_sync_operation(
                         func, operation_name, category, *args, **kwargs
                     )
-                return sync_wrapper
+                return cast(F, sync_wrapper)
         return decorator
 
     def _track_sync_operation(
         self,
-        func: Callable,
+        func: Callable[..., Any],
         operation_name: str,
         category: str,
-        *args,
-        **kwargs
+        *args: Any,
+        **kwargs: Any,
     ) -> Any:
         """Track synchronous operation.
 
@@ -157,11 +161,11 @@ class PerformanceMonitor:
 
     async def _track_async_operation(
         self,
-        func: Callable,
+        func: Callable[..., Any],
         operation_name: str,
         category: str,
-        *args,
-        **kwargs
+        *args: Any,
+        **kwargs: Any,
     ) -> Any:
         """Track asynchronous operation.
 
@@ -212,6 +216,12 @@ class PerformanceMonitor:
             metrics: Operation metrics
             category: Operation category
         """
+        # _record_metrics is only called from the `finally` block after duration
+        # has been set, so this assertion is always satisfied at runtime and
+        # also narrows the Optional for mypy --strict.
+        assert metrics.duration is not None
+        duration: float = metrics.duration
+
         # Add to history
         self.operation_history.append(metrics)
 
@@ -222,35 +232,35 @@ class PerformanceMonitor:
 
         stats = self.stats[key]
         stats.call_count += 1
-        stats.total_duration += metrics.duration
+        stats.total_duration += duration
 
-        if metrics.duration < stats.min_duration:
-            stats.min_duration = metrics.duration
-        if metrics.duration > stats.max_duration:
-            stats.max_duration = metrics.duration
+        if duration < stats.min_duration:
+            stats.min_duration = duration
+        if duration > stats.max_duration:
+            stats.max_duration = duration
 
         stats.avg_duration = stats.total_duration / stats.call_count
 
         if not metrics.success:
             stats.error_count += 1
 
-        if metrics.duration > self.slow_threshold:
+        if duration > self.slow_threshold:
             stats.slow_count += 1
 
         # Log metrics
         status = "SUCCESS" if metrics.success else "FAILED"
         perf_logger.info(
             f"{category.upper()}: {metrics.operation_name} - "
-            f"Duration: {metrics.duration:.3f}s - "
+            f"Duration: {duration:.3f}s - "
             f"Memory: {self._format_bytes(metrics.memory_delta)} - "
             f"Status: {status}"
         )
 
         # Warn about slow operations
-        if metrics.duration > self.slow_threshold:
+        if duration > self.slow_threshold:
             logger.warning(
                 f"Slow operation detected: {metrics.operation_name} "
-                f"took {metrics.duration:.1f}s (threshold: {self.slow_threshold}s)"
+                f"took {duration:.1f}s (threshold: {self.slow_threshold}s)"
             )
 
         # Check for regression
@@ -262,6 +272,10 @@ class PerformanceMonitor:
         Args:
             metrics: Operation metrics
         """
+        # Called only after duration is populated; assertion narrows Optional.
+        assert metrics.duration is not None
+        duration: float = metrics.duration
+
         key = metrics.operation_name
 
         # Need baseline for comparison
@@ -275,11 +289,11 @@ class PerformanceMonitor:
 
         # Check if current duration is significantly worse than baseline
         # Consider it a regression if >50% slower
-        if metrics.duration > baseline * 1.5:
+        if duration > baseline * 1.5:
             logger.warning(
                 f"Performance regression detected: {metrics.operation_name} - "
-                f"Current: {metrics.duration:.3f}s vs Baseline: {baseline:.3f}s "
-                f"({((metrics.duration / baseline - 1) * 100):.1f}% slower)"
+                f"Current: {duration:.3f}s vs Baseline: {baseline:.3f}s "
+                f"({((duration / baseline - 1) * 100):.1f}% slower)"
             )
 
     def _get_memory_usage(self) -> int:
@@ -289,7 +303,9 @@ class PerformanceMonitor:
             Memory usage in bytes
         """
         try:
-            return self.process.memory_info().rss
+            # psutil.Process().memory_info() is typed as Any at the boundary;
+            # .rss is an int at runtime.
+            return int(self.process.memory_info().rss)
         except Exception:
             return 0
 
@@ -302,13 +318,16 @@ class PerformanceMonitor:
         Returns:
             Formatted string
         """
+        count: float = float(bytes_count)
         for unit in ['B', 'KB', 'MB', 'GB']:
-            if abs(bytes_count) < 1024.0:
-                return f"{bytes_count:.1f} {unit}"
-            bytes_count /= 1024.0
-        return f"{bytes_count:.1f} TB"
+            if abs(count) < 1024.0:
+                return f"{count:.1f} {unit}"
+            count /= 1024.0
+        return f"{count:.1f} TB"
 
-    def get_statistics(self, operation_name: Optional[str] = None) -> Dict:
+    def get_statistics(
+        self, operation_name: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Get performance statistics.
 
         Args:
@@ -343,7 +362,7 @@ class PerformanceMonitor:
             for op_name, stats in self.stats.items()
         }
 
-    def get_recent_operations(self, count: int = 10) -> List[Dict]:
+    def get_recent_operations(self, count: int = 10) -> List[Dict[str, Any]]:
         """Get recent operations.
 
         Args:
@@ -364,7 +383,7 @@ class PerformanceMonitor:
             for op in recent
         ]
 
-    def get_system_metrics(self) -> Dict:
+    def get_system_metrics(self) -> Dict[str, Any]:
         """Get current system metrics.
 
         Returns:
@@ -393,7 +412,7 @@ class PerformanceMonitor:
         self.baseline_durations.clear()
         logger.info("Performance statistics reset")
 
-    def export_metrics(self) -> Dict:
+    def export_metrics(self) -> Dict[str, Any]:
         """Export all metrics for analysis.
 
         Returns:
@@ -424,7 +443,9 @@ def get_performance_monitor() -> PerformanceMonitor:
     return _performance_monitor
 
 
-def track_performance(operation_name: str, category: str = "general"):
+def track_performance(
+    operation_name: str, category: str = "general"
+) -> Callable[[F], F]:
     """Convenience decorator for tracking performance.
 
     Args:

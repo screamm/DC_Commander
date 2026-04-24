@@ -37,7 +37,9 @@ from .logging_config import get_logger
 # The excepthook that was active before install_crash_handler() ran. Kept so
 # uninstall_crash_handler() can restore it and so our handler can chain to it
 # after writing the dump (preserving the default stderr traceback).
-_original_excepthook: Optional[Callable] = None
+_original_excepthook: Optional[
+    Callable[[Type[BaseException], BaseException, Optional[TracebackType]], None]
+] = None
 
 # Directory where crash reports are written. Populated at install time so the
 # hook itself does not need to re-resolve it on every crash.
