@@ -62,7 +62,7 @@ class PatternValidationError(ValidationError):
 
 
 def validate_path_comprehensive(
-    path: Path,
+    path: "Path | str",
     base_path: Optional[Path] = None,
     check_exists: bool = False,
     check_writable: bool = False

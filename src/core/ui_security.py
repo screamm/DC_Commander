@@ -83,7 +83,8 @@ def validate_user_filename(filename: str) -> str:
     """
     # Normalize type — InputDialog always returns str but be defensive.
     if not isinstance(filename, str):
-        reason = f"non-string input (type={type(filename).__name__})"
+        # TODO Sprint 3.5: remove defensive isinstance once callers are typed end-to-end
+        reason = f"non-string input (type={type(filename).__name__})"  # type: ignore[unreachable]
         logger.warning("Filename validation failed: %r — %s", filename, reason)
         raise UIValidationError(
             "Name must be text.",
@@ -170,7 +171,8 @@ def validate_user_path(
         UIValidationError: If the path fails any validation check.
     """
     if not isinstance(path_str, str):
-        reason = f"non-string input (type={type(path_str).__name__})"
+        # TODO Sprint 3.5: remove defensive isinstance once callers are typed end-to-end
+        reason = f"non-string input (type={type(path_str).__name__})"  # type: ignore[unreachable]
         logger.warning("Path validation failed: %r — %s", path_str, reason)
         raise UIValidationError(
             "Path must be text.",

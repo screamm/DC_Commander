@@ -80,8 +80,8 @@ class FileOperationError(DCCommanderError):
         message: str,
         path: Optional[Path] = None,
         operation: Optional[str] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize file operation error.
 
@@ -110,7 +110,7 @@ class PermissionDeniedError(FileOperationError):
     to perform the requested operation on the file or directory.
     """
 
-    def __init__(self, message: str, path: Optional[Path] = None, **kwargs):
+    def __init__(self, message: str, path: Optional[Path] = None, **kwargs: Any) -> None:
         """
         Initialize permission denied error.
 
@@ -135,7 +135,7 @@ class PathNotFoundError(FileOperationError):
     path resolution failures.
     """
 
-    def __init__(self, message: str, path: Optional[Path] = None, **kwargs):
+    def __init__(self, message: str, path: Optional[Path] = None, **kwargs: Any) -> None:
         """
         Initialize path not found error.
 
@@ -160,7 +160,7 @@ class DirectoryNotEmptyError(FileOperationError):
     or subdirectories and recursive deletion wasn't specified.
     """
 
-    def __init__(self, message: str, path: Optional[Path] = None, **kwargs):
+    def __init__(self, message: str, path: Optional[Path] = None, **kwargs: Any) -> None:
         """
         Initialize directory not empty error.
 
@@ -192,8 +192,8 @@ class DiskSpaceError(FileOperationError):
         path: Optional[Path] = None,
         required_bytes: Optional[int] = None,
         available_bytes: Optional[int] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize disk space error.
 
@@ -227,7 +227,7 @@ class FileAlreadyExistsError(FileOperationError):
     and overwrite wasn't specified.
     """
 
-    def __init__(self, message: str, path: Optional[Path] = None, **kwargs):
+    def __init__(self, message: str, path: Optional[Path] = None, **kwargs: Any) -> None:
         """
         Initialize file already exists error.
 
@@ -270,8 +270,8 @@ class AsyncOperationCancelledError(AsyncOperationError):
         self,
         message: str = "Operation cancelled by user",
         operation: Optional[str] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize async operation cancelled error.
 
@@ -303,8 +303,8 @@ class AsyncTimeoutError(AsyncOperationError):
         self,
         message: str,
         timeout_seconds: Optional[float] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize async timeout error.
 
@@ -350,8 +350,8 @@ class ThemeLoadError(ThemeError):
         message: str,
         theme_id: Optional[str] = None,
         theme_path: Optional[Path] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize theme load error.
 
@@ -386,9 +386,9 @@ class ThemeValidationError(ThemeError):
     def __init__(
         self,
         message: str,
-        validation_errors: Optional[list] = None,
-        **kwargs
-    ):
+        validation_errors: Optional[list[str]] = None,
+        **kwargs: Any
+    ) -> None:
         """
         Initialize theme validation error.
 
@@ -425,8 +425,8 @@ class ConfigurationError(DCCommanderError):
         message: str,
         config_key: Optional[str] = None,
         config_file: Optional[Path] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize configuration error.
 
@@ -460,9 +460,9 @@ class ConfigValidationError(ConfigurationError):
     def __init__(
         self,
         message: str,
-        validation_errors: Optional[list] = None,
-        **kwargs
-    ):
+        validation_errors: Optional[list[str]] = None,
+        **kwargs: Any
+    ) -> None:
         """
         Initialize config validation error.
 
@@ -498,8 +498,8 @@ class PluginError(DCCommanderError):
         self,
         message: str,
         plugin_name: Optional[str] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize plugin error.
 
@@ -527,7 +527,7 @@ class PluginLoadError(PluginError):
     Indicates plugin file is missing, has syntax errors, or failed initialization.
     """
 
-    def __init__(self, message: str, plugin_name: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, plugin_name: Optional[str] = None, **kwargs: Any) -> None:
         """
         Initialize plugin load error.
 
@@ -555,7 +555,7 @@ class SecurityError(DCCommanderError):
     Used when security validation fails or unsafe operations are attempted.
     """
 
-    def __init__(self, message: str, **kwargs):
+    def __init__(self, message: str, **kwargs: Any) -> None:
         """
         Initialize security error.
 
@@ -582,8 +582,8 @@ class UnsafePathError(SecurityError):
         self,
         message: str,
         path: Optional[Path] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize unsafe path error.
 
@@ -620,8 +620,8 @@ class ValidationError(DCCommanderError):
         message: str,
         field: Optional[str] = None,
         value: Optional[Any] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Initialize validation error.
 

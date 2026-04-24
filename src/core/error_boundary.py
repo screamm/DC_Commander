@@ -44,7 +44,7 @@ class ErrorContext:
     timestamp: datetime = field(default_factory=datetime.now)
     severity: ErrorSeverity = ErrorSeverity.ERROR
     recoverable: bool = True
-    details: Optional[dict] = None
+    details: Optional[dict[str, Any]] = None
     stack_trace: Optional[str] = None
 
 
@@ -88,7 +88,7 @@ class ErrorHistory:
         """
         return list(self.errors)[-count:]
 
-    def get_error_summary(self) -> dict:
+    def get_error_summary(self) -> dict[str, Any]:
         """Get summary of error history.
 
         Returns:
@@ -110,11 +110,13 @@ class ErrorHistory:
 class ErrorBoundary:
     """Application-level error boundary with recovery capabilities."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize error boundary."""
         self.history = ErrorHistory()
-        self.error_handlers: dict[type, Callable] = {}
-        self.global_handler: Optional[Callable] = None
+        self.error_handlers: dict[
+            type[Exception], Callable[[ErrorContext], RecoveryAction]
+        ] = {}
+        self.global_handler: Optional[Callable[[ErrorContext], RecoveryAction]] = None
         self._suppress_all = False
 
     def register_handler(
@@ -150,7 +152,7 @@ class ErrorBoundary:
         context: str = "",
         severity: ErrorSeverity = ErrorSeverity.ERROR,
         recoverable: bool = True,
-        details: Optional[dict] = None
+        details: Optional[dict[str, Any]] = None
     ) -> RecoveryAction:
         """Handle error with recovery options.
 
@@ -215,7 +217,7 @@ class ErrorBoundary:
 
     async def _call_handler(
         self,
-        handler: Callable,
+        handler: Callable[..., Any],
         error_context: ErrorContext
     ) -> RecoveryAction:
         """Call error handler (sync or async).
@@ -227,13 +229,17 @@ class ErrorBoundary:
         Returns:
             Recovery action
         """
-        import asyncio
         import inspect
 
         if inspect.iscoroutinefunction(handler):
-            return await handler(error_context)
+            result = await handler(error_context)
         else:
-            return handler(error_context)
+            result = handler(error_context)
+        # Handlers are registered via typed APIs (register_handler /
+        # set_global_handler) and always return RecoveryAction at runtime.
+        # The Callable[..., Any] signature is necessary to permit both sync
+        # and async variants; cast to the declared return type.
+        return RecoveryAction(result) if not isinstance(result, RecoveryAction) else result
 
     def suppress_all_errors(self, suppress: bool = True) -> None:
         """Suppress all errors (skip all).

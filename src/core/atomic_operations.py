@@ -106,6 +106,11 @@ class AtomicFileOperation:
             backup_file: Backup file path
             completed: Whether operation completed successfully
         """
+        # _log_operation is only invoked from copy_file_atomic / move_file_atomic /
+        # delete_file_atomic, each of which sets current_operation_id via
+        # _generate_operation_id() before logging. The assertion documents that
+        # runtime invariant for the type checker.
+        assert self.current_operation_id is not None
         log_entry = OperationLog(
             operation_id=self.current_operation_id,
             operation_type=operation_type,

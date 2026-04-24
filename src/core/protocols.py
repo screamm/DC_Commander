@@ -266,19 +266,19 @@ class AsyncFileSystemProtocol(Protocol):
 class ConfigurationProtocol(Protocol):
     """Protocol for configuration management."""
 
-    def load(self) -> dict:
+    def load(self) -> dict[str, Any]:
         """Load configuration from storage."""
         ...
 
-    def save(self, config: dict) -> bool:
+    def save(self, config: dict[str, Any]) -> bool:
         """Save configuration to storage."""
         ...
 
-    def get(self, key: str, default: Optional[any] = None) -> any:
+    def get(self, key: str, default: Optional[Any] = None) -> Any:
         """Get configuration value."""
         ...
 
-    def set(self, key: str, value: any) -> None:
+    def set(self, key: str, value: Any) -> None:
         """Set configuration value."""
         ...
 

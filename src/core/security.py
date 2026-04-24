@@ -49,9 +49,9 @@ class SecurityConfig:
 
     # Path validation
     allowed_path_chars: str = r'^[a-zA-Z0-9._\-/\\ ]+$'
-    forbidden_filenames: set = None
+    forbidden_filenames: Optional[set[str]] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize default forbidden filenames."""
         if self.forbidden_filenames is None:
             self.forbidden_filenames = {
@@ -149,7 +149,9 @@ def secure_open(
         # Atomic open with O_NOFOLLOW prevents TOCTOU attacks on Unix
         # On Windows, we checked symlink status before opening
         fd = os.open(path, flags, 0o644)
-        return os.fdopen(fd, mode, buffering=buffering)
+        # os.fdopen returns IO[Any]; for 'b' modes the actual object is a BinaryIO.
+        # Callers of secure_open only use binary modes in practice.
+        return os.fdopen(fd, mode, buffering=buffering)  # type: ignore[return-value]  # TODO Sprint 3.5: narrow mode to binary-only Literal
 
     except OSError as e:
         if e.errno == errno.ELOOP:
@@ -420,7 +422,8 @@ def is_safe_filename(filename: str) -> bool:
     config = get_security_config()
 
     # Check for empty or suspicious names
-    if not filename or filename in config.forbidden_filenames:
+    forbidden = config.forbidden_filenames or set()
+    if not filename or filename in forbidden:
         return False
 
     # Check for null bytes

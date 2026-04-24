@@ -225,6 +225,8 @@ no_implicit_optional = true
 show_error_codes = true
 show_column_numbers = true
 pretty = true
+explicit_package_bases = true
+namespace_packages = true
 
 # Gradually increase strictness
 [[tool.mypy.overrides]]
@@ -239,6 +241,8 @@ module = [
     "psutil.*",
     "aiofiles.*",
     "chardet.*",
+    "py7zr.*",
+    "rarfile.*",
 ]
 ignore_missing_imports = true
 
@@ -246,6 +250,20 @@ ignore_missing_imports = true
 # modules will be migrated in follow-up commits.
 [[tool.mypy.overrides]]
 module = "src.utils.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_any_generics = true
+disallow_untyped_decorators = true
+disallow_subclassing_any = true
+warn_return_any = true
+no_implicit_reexport = true
+strict_equality = true
+extra_checks = true
+
+# Sprint 3 (S3.1 continued): extend mypy --strict to src.core.*.
+[[tool.mypy.overrides]]
+module = "src.core.*"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_calls = true

@@ -9,7 +9,7 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from datetime import datetime
 
 from .security import (
@@ -445,7 +445,7 @@ def create_directory(
         raise FileOperationError(f"Directory creation failed: {e}")
 
 
-def get_file_info(path: Path, follow_symlinks: bool = False) -> dict:
+def get_file_info(path: Path, follow_symlinks: bool = False) -> dict[str, Any]:
     """
     Get comprehensive file information with TOCTOU protection.
 

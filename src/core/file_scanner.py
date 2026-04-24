@@ -5,7 +5,7 @@ Provides efficient directory scanning with filtering, sorting, and search capabi
 """
 
 from pathlib import Path
-from typing import List, Optional, Callable, Dict
+from typing import Any, List, Optional, Callable, Dict
 from datetime import datetime
 from enum import Enum
 import fnmatch
@@ -195,7 +195,7 @@ def sort_files(
     Returns:
         Sorted list of FileEntry objects
     """
-    sort_functions: Dict[SortOrder, Callable[[FileEntry], any]] = {
+    sort_functions: Dict[SortOrder, Callable[[FileEntry], Any]] = {
         SortOrder.NAME_ASC: lambda e: e.name.lower(),
         SortOrder.NAME_DESC: lambda e: e.name.lower(),
         SortOrder.SIZE_ASC: lambda e: e.size,
@@ -320,7 +320,7 @@ def _search_file_content(
         return False
 
 
-def get_directory_stats(path: Path) -> Dict[str, any]:
+def get_directory_stats(path: Path) -> Dict[str, Any]:
     """
     Calculate directory statistics.
 
@@ -330,37 +330,35 @@ def get_directory_stats(path: Path) -> Dict[str, any]:
     Returns:
         Dictionary with statistics (file_count, dir_count, total_size, etc.)
     """
-    stats = {
-        'file_count': 0,
-        'directory_count': 0,
-        'total_size': 0,
-        'largest_file': None,
-        'largest_file_size': 0,
-        'extensions': {},
-        'hidden_count': 0
-    }
+    file_count: int = 0
+    directory_count: int = 0
+    total_size: int = 0
+    largest_file: Optional[str] = None
+    largest_file_size: int = 0
+    extensions: Dict[str, int] = {}
+    hidden_count: int = 0
 
     try:
         for item in path.rglob('*'):
             try:
                 if item.is_file():
-                    stats['file_count'] += 1
+                    file_count += 1
                     size = item.stat().st_size
-                    stats['total_size'] += size
+                    total_size += size
 
-                    if size > stats['largest_file_size']:
-                        stats['largest_file_size'] = size
-                        stats['largest_file'] = str(item)
+                    if size > largest_file_size:
+                        largest_file_size = size
+                        largest_file = str(item)
 
                     ext = item.suffix.lower()
                     if ext:
-                        stats['extensions'][ext] = stats['extensions'].get(ext, 0) + 1
+                        extensions[ext] = extensions.get(ext, 0) + 1
 
                 elif item.is_dir():
-                    stats['directory_count'] += 1
+                    directory_count += 1
 
                 if item.name.startswith('.'):
-                    stats['hidden_count'] += 1
+                    hidden_count += 1
 
             except (OSError, PermissionError):
                 continue
@@ -368,4 +366,12 @@ def get_directory_stats(path: Path) -> Dict[str, any]:
     except PermissionError:
         pass
 
-    return stats
+    return {
+        'file_count': file_count,
+        'directory_count': directory_count,
+        'total_size': total_size,
+        'largest_file': largest_file,
+        'largest_file_size': largest_file_size,
+        'extensions': extensions,
+        'hidden_count': hidden_count,
+    }

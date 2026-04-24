@@ -11,7 +11,7 @@ Provides:
 
 import asyncio
 from pathlib import Path
-from typing import List, AsyncGenerator, Optional, Set, Callable
+from typing import Any, List, AsyncGenerator, Optional, Set, Callable, Awaitable
 from dataclasses import dataclass
 from datetime import datetime
 import logging
@@ -45,7 +45,7 @@ class IncrementalDirectoryLoader:
         self,
         path: Path,
         progress_callback: Optional[Callable[[LoadingProgress], None]] = None
-    ) -> AsyncGenerator[List, None]:
+    ) -> AsyncGenerator[List[Any], None]:
         """Load directory in batches for immediate display.
 
         Args:
@@ -136,10 +136,10 @@ class PredictiveCache:
             max_preload: Maximum directories to preload
         """
         self.max_preload = max_preload
-        self._preload_tasks: Set[asyncio.Task] = set()
-        self._cache_loader: Optional[Callable] = None
+        self._preload_tasks: Set[asyncio.Task[Any]] = set()
+        self._cache_loader: Optional[Callable[[Path], Awaitable[Any]]] = None
 
-    def set_cache_loader(self, loader: Callable) -> None:
+    def set_cache_loader(self, loader: Callable[[Path], Awaitable[Any]]) -> None:
         """Set cache loading function.
 
         Args:
@@ -208,12 +208,12 @@ class PredictiveCache:
 class LazyFileItemCache:
     """Lazy-loading cache using weak references for memory efficiency."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize lazy cache."""
-        self._cache: WeakValueDictionary = WeakValueDictionary()
+        self._cache: WeakValueDictionary[str, Any] = WeakValueDictionary()
         self._string_cache: dict[str, str] = {}  # Intern common strings
 
-    def get_or_create(self, path: Path, factory: Callable):
+    def get_or_create(self, path: Path, factory: Callable[[], Any]) -> Any:
         """Get cached item or create new one.
 
         Args:
@@ -266,11 +266,11 @@ class BackgroundRefresher:
             refresh_interval: Refresh interval in seconds
         """
         self.refresh_interval = refresh_interval
-        self._refresh_task: Optional[asyncio.Task] = None
+        self._refresh_task: Optional[asyncio.Task[None]] = None
         self._watched_dirs: Set[Path] = set()
-        self._refresh_callback: Optional[Callable] = None
+        self._refresh_callback: Optional[Callable[[Path], Awaitable[Any]]] = None
 
-    def set_refresh_callback(self, callback: Callable) -> None:
+    def set_refresh_callback(self, callback: Callable[[Path], Awaitable[Any]]) -> None:
         """Set callback for refresh notifications.
 
         Args:
@@ -345,7 +345,7 @@ class MemoryOptimizer:
     """Optimize memory usage through various strategies."""
 
     @staticmethod
-    def optimize_file_items(items: List) -> List:
+    def optimize_file_items(items: List[Any]) -> List[Any]:
         """Optimize memory usage of file items.
 
         Args:
@@ -355,7 +355,7 @@ class MemoryOptimizer:
             Optimized list
         """
         # Intern common strings
-        string_cache = {}
+        string_cache: dict[str, str] = {}
 
         def intern(s: str) -> str:
             if s in string_cache:
@@ -374,7 +374,7 @@ class MemoryOptimizer:
         return items
 
     @staticmethod
-    def estimate_memory_usage(items: List) -> int:
+    def estimate_memory_usage(items: List[Any]) -> int:
         """Estimate memory usage of item list.
 
         Args:

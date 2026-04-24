@@ -9,7 +9,7 @@ import zipfile
 import tarfile
 import os
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict, cast
 from datetime import datetime
 from enum import Enum
 
@@ -204,10 +204,12 @@ def _list_tar_contents(path: Path, archive_type: ArchiveType) -> List[ArchiveEnt
         ArchiveType.TAR_XZ: 'r:xz'
     }
 
-    entries = []
+    entries: List[ArchiveEntry] = []
 
     try:
-        with tarfile.open(path, mode_map[archive_type]) as tf:
+        # mode_map values are valid tarfile mode literals at runtime; mypy
+        # can't narrow str -> Literal[...] through a dict lookup.
+        with tarfile.open(path, mode_map[archive_type]) as tf:  # type: ignore[call-overload]  # TODO Sprint 3.5: switch mode_map to Literal-typed values
             for member in tf.getmembers():
                 modified = datetime.fromtimestamp(member.mtime) if member.mtime else None
 
@@ -450,7 +452,9 @@ def _extract_tar(
     }
 
     try:
-        with tarfile.open(source, mode_map[archive_type]) as tf:
+        # mode_map values are valid tarfile mode literals at runtime; mypy
+        # can't narrow str -> Literal[...] through a dict lookup.
+        with tarfile.open(source, mode_map[archive_type]) as tf:  # type: ignore[call-overload]  # TODO Sprint 3.5: switch mode_map to Literal-typed values
             if validate_safety:
                 # Secure extraction with path validation
                 members_to_extract = tf.getmembers()
@@ -629,7 +633,9 @@ def _create_tar(
     }
 
     try:
-        with tarfile.open(dest, mode_map[archive_type]) as tf:
+        # mode_map values are valid tarfile mode literals at runtime; mypy
+        # can't narrow str -> Literal[...] through a dict lookup.
+        with tarfile.open(dest, mode_map[archive_type]) as tf:  # type: ignore[call-overload]  # TODO Sprint 3.5: switch mode_map to Literal-typed values
             for file_path in files:
                 if not file_path.exists():
                     continue
@@ -663,7 +669,7 @@ def _get_archive_name(path: Path, base_dir: Optional[Path]) -> str:
     return path.name
 
 
-def get_archive_info(path: Path) -> Dict[str, any]:
+def get_archive_info(path: Path) -> Dict[str, Any]:
     """
     Get comprehensive archive information.
 
@@ -675,21 +681,24 @@ def get_archive_info(path: Path) -> Dict[str, any]:
     """
     entries = list_archive_contents(path)
 
-    info = {
+    total_size: int = sum(e.size for e in entries)
+    compressed_size: int = sum(e.compressed_size for e in entries)
+
+    if total_size > 0:
+        ratio = (1 - compressed_size / total_size) * 100
+        # Clamp to 0-100 range (small files can have negative compression due to overhead)
+        compression_ratio = max(0.0, min(100.0, ratio))
+    else:
+        compression_ratio = 0.0
+
+    info: Dict[str, Any] = {
         'type': get_archive_type(path).value,
         'file_count': sum(1 for e in entries if not e.is_directory),
         'directory_count': sum(1 for e in entries if e.is_directory),
-        'total_size': sum(e.size for e in entries),
-        'compressed_size': sum(e.compressed_size for e in entries),
-        'compression_ratio': 0.0,
-        'entry_count': len(entries)
+        'total_size': total_size,
+        'compressed_size': compressed_size,
+        'compression_ratio': compression_ratio,
+        'entry_count': len(entries),
     }
-
-    if info['total_size'] > 0:
-        ratio = (1 - info['compressed_size'] / info['total_size']) * 100
-        # Clamp to 0-100 range (small files can have negative compression due to overhead)
-        info['compression_ratio'] = max(0.0, min(100.0, ratio))
-    else:
-        info['compression_ratio'] = 0.0
 
     return info
