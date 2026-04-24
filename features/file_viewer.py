@@ -5,7 +5,7 @@ hex viewing, and advanced navigation features.
 """
 
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple
 import mimetypes
 from dataclasses import dataclass
 
@@ -18,6 +18,107 @@ from rich.syntax import Syntax
 from rich.text import Text
 
 
+# --------------------------------------------------------------------------- #
+# Binary-file type detection (Sprint 3 S3.6)
+# --------------------------------------------------------------------------- #
+
+# Ordered list of (magic bytes, human label).  First match wins.
+# Keep prefixes short (<= 8 bytes) so we only need to peek the header.
+_MAGIC_SIGNATURES: Tuple[Tuple[bytes, str], ...] = (
+    (b"\x89PNG\r\n\x1a\n", "PNG image"),
+    (b"\xff\xd8\xff", "JPEG image"),
+    (b"GIF87a", "GIF image"),
+    (b"GIF89a", "GIF image"),
+    (b"GIF8", "GIF image"),  # Fallback for odd GIF8 headers
+    (b"PK\x03\x04", "ZIP archive"),
+    (b"PK\x05\x06", "ZIP archive (empty)"),
+    (b"PK\x07\x08", "ZIP archive (spanned)"),
+    (b"\x1f\x8b", "gzip archive"),
+    (b"BZh", "bzip2 archive"),
+    (b"7z\xbc\xaf\x27\x1c", "7-Zip archive"),
+    (b"Rar!\x1a\x07", "RAR archive"),
+    (b"\x7fELF", "ELF executable (Linux)"),
+    (b"MZ", "Windows executable"),
+    (b"%PDF-", "PDF document"),
+    (b"\xca\xfe\xba\xbe", "Java class file"),
+    (b"RIFF", "RIFF container (WAV/AVI)"),
+)
+
+# Extension fallback when no magic signature matches.
+_EXT_LABELS: dict = {
+    ".exe": "Windows executable",
+    ".dll": "Windows DLL",
+    ".so": "Shared library",
+    ".dylib": "macOS dynamic library",
+    ".o": "Object file",
+    ".obj": "Object file",
+    ".class": "Java class file",
+    ".pyc": "Python bytecode",
+    ".wasm": "WebAssembly binary",
+    ".bin": "Binary data",
+    ".dat": "Binary data",
+    ".iso": "ISO image",
+    ".mp3": "MP3 audio",
+    ".mp4": "MP4 video",
+    ".mkv": "Matroska video",
+    ".flac": "FLAC audio",
+    ".webp": "WebP image",
+}
+
+
+def detect_binary_type(path: Path, header: Optional[bytes] = None) -> str:
+    """Detect a human-readable label for a binary file.
+
+    Args:
+        path: File path (used for the extension fallback).
+        header: Optional pre-read header bytes (first 8+ bytes).  If
+            ``None`` the function reads up to 16 bytes from ``path``.
+
+    Returns:
+        Short description such as ``"PNG image"``, ``"Windows executable"``,
+        or ``"Binary data"`` when nothing matches.
+    """
+    if header is None:
+        try:
+            with open(path, "rb") as f:
+                header = f.read(16)
+        except OSError:
+            header = b""
+
+    for signature, label in _MAGIC_SIGNATURES:
+        if header.startswith(signature):
+            return label
+
+    # Extension fallback
+    ext_label = _EXT_LABELS.get(path.suffix.lower())
+    if ext_label is not None:
+        return ext_label
+
+    return "Binary data"
+
+
+def format_binary_size(size: int) -> str:
+    """Human-readable file size used in the viewer banner.
+
+    Kept as a module-level helper so tests can exercise it without
+    instantiating the Textual screen.
+    """
+    value: float = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024.0:
+            return f"{value:.1f} {unit}"
+        value /= 1024.0
+    return f"{value:.1f} PB"
+
+
+def build_binary_banner(path: Path, size: int, binary_type: str) -> str:
+    """Build the banner line shown above a hex dump.
+
+    Example: ``"Binary file: PNG image, 1.2 KB"``.
+    """
+    return f"Binary file: {binary_type}, {format_binary_size(size)}"
+
+
 @dataclass
 class ViewerState:
     """Current viewer state."""
@@ -28,6 +129,7 @@ class ViewerState:
     encoding: str = "utf-8"
     search_term: str = ""
     search_matches: List[int] = None
+    binary_type: str = ""  # Populated for binary files: "PNG image", etc.
 
 
 class FileViewer(Screen):
@@ -209,12 +311,19 @@ class FileViewer(Screen):
         with open(self.file_path, 'rb') as f:
             data = f.read()
 
-        # Convert to hex view format
-        self.content_lines = self._format_hex(data)
+        # Detect the binary type using magic-byte comparison.
+        binary_type = detect_binary_type(self.file_path, header=data[:16])
+        banner = build_binary_banner(self.file_path, len(data), binary_type)
+
+        # Prepend banner + blank separator line above the hex dump.
+        hex_lines = self._format_hex(data)
+        self.content_lines = [banner, ""] + hex_lines
+
         self.state = ViewerState(
             file_path=self.file_path,
             total_lines=len(self.content_lines),
-            view_mode="hex"
+            view_mode="hex",
+            binary_type=binary_type,
         )
 
     def _format_hex(self, data: bytes) -> List[str]:
@@ -389,11 +498,7 @@ class FileViewer(Screen):
         Returns:
             Formatted size string
         """
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size < 1024.0:
-                return f"{size:.1f} {unit}"
-            size /= 1024.0
-        return f"{size:.1f} PB"
+        return format_binary_size(size)
 
     def _show_error(self, message: str) -> None:
         """Show error message.
@@ -457,22 +562,35 @@ class FileViewer(Screen):
         self._update_display()
 
     def action_toggle_hex(self) -> None:
-        """Toggle hex view mode."""
-        if self.is_binary:
-            self.notify("File is already in hex mode", severity="warning")
+        """Toggle hex <-> text view manually.
+
+        Users can press ``h`` to flip between hex and text rendering even
+        when the auto-detector disagrees — useful when a file has no null
+        bytes but is still mostly binary, or when a binary file happens to
+        contain readable text the user wants to see.
+        """
+        if self.state is None:
             return
 
         if self.state.view_mode == "text":
-            # Switch to hex
+            # Switch to hex: read raw bytes, build banner, swap mode
             with open(self.file_path, 'rb') as f:
                 data = f.read()
-            self.content_lines = self._format_hex(data)
+            binary_type = detect_binary_type(self.file_path, header=data[:16])
+            banner = build_binary_banner(self.file_path, len(data), binary_type)
+            self.content_lines = [banner, ""] + self._format_hex(data)
             self.state.view_mode = "hex"
             self.state.total_lines = len(self.content_lines)
+            self.state.binary_type = binary_type
             self._content_scroll_y = 0
         else:
-            # Switch back to text
+            # Switch back to text.  If detection flagged the file as binary,
+            # we still attempt a text load so the user can see what's there.
             self._load_text()
+            # _load_text may fall back to binary (sets is_binary=True) if the
+            # file genuinely cannot be decoded — handle that gracefully.
+            if self.state.view_mode == "text":
+                self.is_binary = False
             self._content_scroll_y = 0
 
         self._update_display()
