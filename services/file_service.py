@@ -5,7 +5,7 @@ Integrated with security module for path validation and filename sanitization.
 """
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 import shutil
 from dataclasses import dataclass
 from enum import Enum
@@ -284,7 +284,7 @@ class FileService:
             return (False, str(e))
 
     @staticmethod
-    def get_file_info(path: Path) -> Optional[dict]:
+    def get_file_info(path: Path) -> Optional[dict[str, Any]]:
         """Get detailed file information.
 
         Args:

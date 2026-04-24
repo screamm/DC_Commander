@@ -4,8 +4,7 @@ Provides data access layer for file system operations.
 """
 
 from pathlib import Path
-from typing import List, Optional, Callable, Tuple
-from dataclasses import dataclass
+from typing import Any, List, Optional, Callable, Tuple
 from datetime import datetime
 from models.file_item import FileItem
 
@@ -13,7 +12,7 @@ from models.file_item import FileItem
 class FileRepository:
     """Repository for file system data access."""
 
-    def __init__(self, show_hidden: bool = False):
+    def __init__(self, show_hidden: bool = False) -> None:
         """Initialize file repository.
 
         Args:
@@ -105,7 +104,7 @@ class FileRepository:
         Returns:
             List of matching file paths
         """
-        matches = []
+        matches: List[Path] = []
 
         if recursive:
             if max_depth is not None:
@@ -118,7 +117,7 @@ class FileRepository:
 
         return matches
 
-    def get_file_stats(self, path: Path) -> Optional[dict]:
+    def get_file_stats(self, path: Path) -> Optional[dict[str, Any]]:
         """Get file statistics.
 
         Args:
@@ -156,7 +155,7 @@ class FileRepository:
         Returns:
             List of (depth, path) tuples
         """
-        tree = []
+        tree: List[Tuple[int, Path]] = []
 
         def _walk_tree(path: Path, depth: int) -> None:
             if depth > max_depth:
@@ -175,7 +174,7 @@ class FileRepository:
         _walk_tree(root_path, 0)
         return tree
 
-    def get_drive_info(self, path: Path) -> Optional[dict]:
+    def get_drive_info(self, path: Path) -> Optional[dict[str, Any]]:
         """Get drive/volume information.
 
         Args:

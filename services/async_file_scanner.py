@@ -7,7 +7,7 @@ progress reporting, and cancellation support.
 
 import asyncio
 from pathlib import Path
-from typing import AsyncGenerator, Callable, Optional, List
+from typing import Any, AsyncGenerator, Callable, Optional, List
 from dataclasses import dataclass
 import fnmatch
 
@@ -31,7 +31,7 @@ class AsyncFileScanner:
     directory tree scans.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize async file scanner."""
         self._cancelled = False
 
@@ -109,7 +109,7 @@ class AsyncFileScanner:
 
             for entry in entries:
                 if self._cancelled:
-                    break
+                    break  # type: ignore[unreachable]
 
                 files_scanned += 1
 
@@ -278,7 +278,7 @@ class FileSearchOptions:
 async def find_files(
     path: Path,
     pattern: str,
-    **options
+    **options: Any,
 ) -> List[Path]:
     """
     Convenience function for quick file searches.

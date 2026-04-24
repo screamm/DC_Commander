@@ -50,8 +50,8 @@ class AsyncFileService:
         self.async_ops = AsyncFileOperations(chunk_size=chunk_size)
         self._cancelled = False
         self._partial_files: List[Path] = []
-        self._cancel_lock = None
-        self._current_task: Optional[asyncio.Task] = None
+        self._cancel_lock: Optional[asyncio.Lock] = None
+        self._current_task: Optional[asyncio.Task[object]] = None
         self._cleanup_enabled = True
 
     def cancel(self) -> None:
@@ -69,10 +69,10 @@ class AsyncFileService:
             Number of partial files cleaned up
         """
         if self._cancel_lock is None:
-            import asyncio
             self._cancel_lock = asyncio.Lock()
 
-        async with self._cancel_lock:
+        lock = self._cancel_lock
+        async with lock:
             self._cancelled = True
             self.async_ops.cancel()
 
@@ -244,7 +244,7 @@ class AsyncFileService:
                     # Copy single file with progress
                     file_size = item.stat().st_size
 
-                    def file_progress(bytes_done: int):
+                    def file_progress(bytes_done: int) -> None:
                         if progress_callback:
                             progress = AsyncOperationProgress(
                                 current_file=item.name,
